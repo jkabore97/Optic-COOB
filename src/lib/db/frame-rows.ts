@@ -33,5 +33,6 @@ export function rowToFrame(r: Row): CatalogFrameRecord {
     sortOrder: num(r.sort_order),
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
+    modelUpdatedAt: r.model_updated_at == null ? null : iso(r.model_updated_at),
   };
 }

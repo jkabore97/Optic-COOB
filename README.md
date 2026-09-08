@@ -8,10 +8,11 @@ Fonctionnalités :
 - **Catalogue de montures** géré dans l'espace équipe (photo du produit, prix, caractéristiques),
   avec filtres (forme, matière, genre, budget) et fiches détaillées. Tant qu'aucune monture n'a été
   ajoutée, le site affiche des modèles de démonstration.
-- **Essayage virtuel** : détection du visage dans le navigateur (MediaPipe Face Landmarker),
-  superposition de la **photo réelle de la monture** en direct (caméra) ou sur une photo, capture à
-  partager. Aucune image n'est envoyée au serveur. Chaque monture est calibrée une fois dans
-  l'espace équipe (position des deux centres de verres sur la photo).
+- **Essayage virtuel** : détection du visage dans le navigateur (MediaPipe Face Landmarker), en
+  direct (caméra) ou sur une photo, capture à partager. Aucune image n'est envoyée au serveur.
+  Deux rendus : **3D** (modèle GLB de la monture posé sur le visage avec three.js, suit
+  l'orientation de la tête, branches masquées derrière le visage, exposition calée sur la vidéo)
+  ou **photo** (image de la monture inclinée avec la tête) quand la monture n'a pas de modèle 3D.
 - **Prise de rendez-vous** pour un examen de vue, par agence, avec créneaux en temps réel,
   SMS de confirmation immédiat et SMS de rappel la veille.
 - **Suivi de commande** côté client (référence + téléphone).
@@ -63,6 +64,19 @@ Les montures de démonstration sont dans `src/lib/frames.ts` ; leurs visuels son
 
 Les photos sont stockées dans la base de données et servies par `/api/frames/:id/image` avec un
 cache long.
+
+### Modèles 3D (essayage réaliste)
+
+Dans la même fiche, section « Modèle 3D » : un fichier **`.glb`** (glTF binaire) de la monture,
+**3 Mo maximum** (limite des requêtes Vercel). Conventions : face avant vers +Z, branches vers
+−Z, monture ouverte, à l'échelle réelle ; l'origine est recalculée automatiquement (milieu des
+verres). Un aperçu tournant vérifie l'orientation avant l'enregistrement. Le modèle est servi par
+`/api/frames/:id/model`.
+
+Pour alléger un GLB : `npx @gltf-transform/cli optimize in.glb out.glb --compress draco --texture-size 1024`.
+
+Sources de modèles : fournisseurs (demander les assets 3D), modélisation par un artiste 3D, ou
+scan photogrammétrique. Tant qu'une monture n'a pas de modèle, l'essayage utilise sa photo.
 
 Variables d'environnement (voir `.env.example`) :
 
@@ -157,7 +171,8 @@ src/lib/config.ts   agences, horaires, réglages métier
 src/lib/frames.ts   catalogue
 src/lib/catalog.ts  catalogue public (base de données, ou démonstration si vide)
 src/lib/db/         stockage (Cloudflare D1, PostgreSQL ou fichier JSON) + schémas SQL (schema.ts)
-src/lib/tryon-math.ts  placement d'un visuel sur les pupilles ; src/lib/image-tools.ts  détourage
+src/lib/tryon-math.ts  placement d'un visuel photo sur les pupilles ; src/lib/image-tools.ts  détourage
+src/lib/tryon-3d.ts    moteur d'essayage 3D (three.js) ; src/lib/tryon-3d-math.ts  géométrie testée
 src/lib/sms/        fournisseurs SMS et modèles de messages
 src/lib/glasses-scene.ts  scène 3D three.js ; src/lib/lens-outline.ts  contours des verres
 cloudflare/         point d'entrée du Worker (site + cron) ; wrangler.jsonc, open-next.config.ts

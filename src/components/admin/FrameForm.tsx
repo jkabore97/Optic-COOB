@@ -7,6 +7,7 @@ import { COLOR_LABELS, COLOR_SWATCH, GENDER_LABELS, MATERIAL_LABELS, SHAPE_LABEL
 import { detectLensCenters, loadToCanvas, removeLightBackground, trimTransparent } from "@/lib/image-tools";
 import { defaultAnchors, type Pt } from "@/lib/tryon-math";
 import type { CatalogFrameRecord } from "@/lib/db/types";
+import { ModelPreview } from "./ModelPreview";
 
 interface Props {
   initial?: CatalogFrameRecord;
@@ -34,6 +35,28 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
   const [anchorR, setAnchorR] = useState<Pt | null>(initial ? { x: initial.anchorRx, y: initial.anchorRy } : null);
   const [picking, setPicking] = useState<"L" | "R" | null>(null);
   const [autoCalibrated, setAutoCalibrated] = useState(false);
+  /** Modèle 3D : data URL du GLB choisi, ou "" ; `removeModel` pour supprimer l'existant. */
+  const [modelData, setModelData] = useState("");
+  const [modelName, setModelName] = useState("");
+  const [modelError, setModelError] = useState("");
+  const [removeModel, setRemoveModel] = useState(false);
+  const hasExistingModel = Boolean(initial?.modelUpdatedAt);
+
+  const onModelFile = (file: File | undefined) => {
+    setModelError("");
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      setModelError("Fichier trop lourd (3 Mo maximum). Compressez-le avec gltf-transform (draco) ou Blender.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setModelData(String(reader.result));
+      setModelName(file.name);
+      setRemoveModel(false);
+    };
+    reader.readAsDataURL(file);
+  };
   const [removeBg, setRemoveBg] = useState(true);
   const [clearLenses, setClearLenses] = useState(true);
   const [threshold, setThreshold] = useState(228);
@@ -105,6 +128,8 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
       <input type="hidden" name="anchorLy" value={anchorL?.y ?? 0} />
       <input type="hidden" name="anchorRx" value={anchorR?.x ?? 0} />
       <input type="hidden" name="anchorRy" value={anchorR?.y ?? 0} />
+      <input type="hidden" name="modelData" value={modelData} />
+      <input type="hidden" name="removeModel" value={removeModel ? "1" : ""} />
 
       {/* Photo + calibrage */}
       <section className="card p-5 lg:col-span-3">
@@ -206,6 +231,35 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
         ) : (
           <div className="mt-4 flex h-40 items-center justify-center rounded-xl border border-dashed border-ink/20 text-sm text-ink-3">
             Aucune photo pour l&apos;instant
+          </div>
+        )}
+      </section>
+
+      {/* Modèle 3D */}
+      <section className="card p-5 lg:col-span-3 lg:order-3">
+        <h2 className="text-lg font-bold">3. Modèle 3D (facultatif, mais c&apos;est lui qui fait l&apos;essayage réaliste)</h2>
+        <p className="mt-1 text-sm text-ink-2">
+          Fichier <code>.glb</code> de la monture, 3 Mo maximum : face avant vers l&apos;avant, branches vers l&apos;arrière, à l&apos;échelle réelle.
+          Sans modèle, l&apos;essayage utilise la photo. Avec, la monture suit la tête en 3D et les branches passent derrière le visage.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <label className="btn-outline btn-sm cursor-pointer">
+            {modelData || hasExistingModel ? "Remplacer le modèle 3D" : "Choisir un fichier .glb"}
+            <input type="file" accept=".glb,model/gltf-binary" className="sr-only" onChange={(e) => onModelFile(e.target.files?.[0])} />
+          </label>
+          {modelName && <span className="text-xs text-ink-3">{modelName}</span>}
+          {hasExistingModel && !modelData && (
+            <label className="flex items-center gap-2 text-sm text-ink-2">
+              <input type="checkbox" className="h-4 w-4 accent-brand-700" checked={removeModel} onChange={(e) => setRemoveModel(e.target.checked)} />
+              Supprimer le modèle 3D actuel
+            </label>
+          )}
+        </div>
+        {modelError && <p className="mt-2 rounded-xl bg-red-50 px-4 py-2 text-sm text-red-800">{modelError}</p>}
+        {(modelData || (hasExistingModel && !removeModel)) && (
+          <div className="mt-4 max-w-lg">
+            <ModelPreview url={modelData || `/api/frames/${initial!.id}/model?v=${Date.parse(initial!.modelUpdatedAt!) || 0}`} />
+            <p className="mt-2 text-xs text-ink-3">Aperçu : la monture doit apparaître de face, branches vers l&apos;arrière.</p>
           </div>
         )}
       </section>

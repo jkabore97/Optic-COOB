@@ -15,7 +15,12 @@ export function frameRecordImageUrl(r: Pick<CatalogFrameRecord, "id" | "updatedA
   return `/api/frames/${r.id}/image?v=${Date.parse(r.updatedAt) || 0}`;
 }
 
+export function frameRecordModelUrl(r: Pick<CatalogFrameRecord, "id" | "modelUpdatedAt">): string | null {
+  return r.modelUpdatedAt ? `/api/frames/${r.id}/model?v=${Date.parse(r.modelUpdatedAt) || 0}` : null;
+}
+
 export function recordToFrame(r: CatalogFrameRecord): Frame {
+  const modelUrl = frameRecordModelUrl(r);
   return {
     id: r.id,
     source: "db",
@@ -38,6 +43,7 @@ export function recordToFrame(r: CatalogFrameRecord): Frame {
       anchorR: { x: r.anchorRx, y: r.anchorRy },
     },
     has3d: false,
+    ...(modelUrl ? { model: { url: modelUrl } } : {}),
   };
 }
 

@@ -6,6 +6,7 @@ import type {
   CatalogFrameInput,
   CatalogFrameRecord,
   FrameImageBlob,
+  FrameModelBlob,
   NewAppointment,
   NewOrder,
   Order,
@@ -209,7 +210,7 @@ export class FileStore implements Store {
     if (image) await this.writeImage(id, image);
     return this.mutate((data) => {
       const now = new Date().toISOString();
-      const frame: CatalogFrameRecord = { ...input, id, imageMime: image?.mime ?? null, createdAt: now, updatedAt: now };
+      const frame: CatalogFrameRecord = { ...input, id, imageMime: image?.mime ?? null, createdAt: now, updatedAt: now, modelUpdatedAt: null };
       data.frames.push(frame);
       return frame;
     });
@@ -237,8 +238,44 @@ export class FileStore implements Store {
       data.frames.splice(i, 1);
       return true;
     });
-    if (removed) await rm(this.imagePath(id), { force: true });
+    if (removed) {
+      await rm(this.imagePath(id), { force: true });
+      await rm(this.modelPath(id), { force: true });
+    }
     return removed;
+  }
+
+  private modelPath(id: string): string {
+    return path.join(path.dirname(this.file), "models", `${id}.glb`);
+  }
+
+  async setFrameModel(frameId: string, model: { mime: string; bytes: Uint8Array }): Promise<void> {
+    const file = this.modelPath(frameId);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, model.bytes);
+    await this.mutate((data) => {
+      const frame = data.frames.find((f) => f.id === frameId);
+      if (frame) frame.modelUpdatedAt = new Date().toISOString();
+    });
+  }
+
+  async deleteFrameModel(frameId: string): Promise<void> {
+    await rm(this.modelPath(frameId), { force: true });
+    await this.mutate((data) => {
+      const frame = data.frames.find((f) => f.id === frameId);
+      if (frame) frame.modelUpdatedAt = null;
+    });
+  }
+
+  async getFrameModel(frameId: string): Promise<FrameModelBlob | null> {
+    const frame = await this.getFrame(frameId);
+    if (!frame?.modelUpdatedAt) return null;
+    try {
+      const bytes = await readFile(this.modelPath(frameId));
+      return { mime: "model/gltf-binary", bytes, updatedAt: frame.modelUpdatedAt };
+    } catch {
+      return null;
+    }
   }
 
   async getFrameImage(id: string): Promise<FrameImageBlob | null> {

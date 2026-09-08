@@ -7,6 +7,7 @@ import type {
   CatalogFrameInput,
   CatalogFrameRecord,
   FrameImageBlob,
+  FrameModelBlob,
   NewAppointment,
   NewOrder,
   Order,
@@ -245,7 +246,7 @@ export class D1Store implements Store {
   async listFrames(opts: { includeInactive?: boolean } = {}): Promise<CatalogFrameRecord[]> {
     await this.ready();
     const { results } = await this.db
-      .prepare(`select * from frames where (? = 1 or active = 1) order by sort_order, created_at`)
+      .prepare(`select f.*, m.updated_at as model_updated_at from frames f left join frame_models m on m.frame_id = f.id where (? = 1 or f.active = 1) order by f.sort_order, f.created_at`)
       .bind(opts.includeInactive ? 1 : 0)
       .all<Row>();
     return results.map(rowToFrame);
@@ -253,13 +254,13 @@ export class D1Store implements Store {
 
   async getFrame(id: string): Promise<CatalogFrameRecord | null> {
     await this.ready();
-    const row = await this.db.prepare(`select * from frames where id = ?`).bind(id).first<Row>();
+    const row = await this.db.prepare(`select f.*, m.updated_at as model_updated_at from frames f left join frame_models m on m.frame_id = f.id where f.id = ?`).bind(id).first<Row>();
     return row ? rowToFrame(row) : null;
   }
 
   async getFrameBySlug(slug: string): Promise<CatalogFrameRecord | null> {
     await this.ready();
-    const row = await this.db.prepare(`select * from frames where slug = ?`).bind(slug).first<Row>();
+    const row = await this.db.prepare(`select f.*, m.updated_at as model_updated_at from frames f left join frame_models m on m.frame_id = f.id where f.slug = ?`).bind(slug).first<Row>();
     return row ? rowToFrame(row) : null;
   }
 
@@ -308,8 +309,33 @@ export class D1Store implements Store {
     return this.getFrame(id);
   }
 
+  async setFrameModel(frameId: string, model: { mime: string; bytes: Uint8Array }): Promise<void> {
+    await this.ready();
+    await this.db
+      .prepare(
+        `insert into frame_models (frame_id, mime, model, updated_at) values (?, ?, ?, ?)
+         on conflict (frame_id) do update set mime = excluded.mime, model = excluded.model, updated_at = excluded.updated_at`,
+      )
+      .bind(frameId, model.mime, toArrayBuffer(model.bytes), new Date().toISOString())
+      .run();
+  }
+
+  async deleteFrameModel(frameId: string): Promise<void> {
+    await this.ready();
+    await this.db.prepare(`delete from frame_models where frame_id = ?`).bind(frameId).run();
+  }
+
+  async getFrameModel(frameId: string): Promise<FrameModelBlob | null> {
+    await this.ready();
+    const row = await this.db.prepare(`select mime, model, updated_at from frame_models where frame_id = ?`).bind(frameId).first<Row>();
+    if (!row) return null;
+    const raw = row.model as ArrayBuffer | Uint8Array;
+    return { mime: String(row.mime), bytes: raw instanceof Uint8Array ? raw : new Uint8Array(raw), updatedAt: String(row.updated_at) };
+  }
+
   async deleteFrame(id: string): Promise<boolean> {
     await this.ready();
+    await this.db.prepare(`delete from frame_models where frame_id = ?`).bind(id).run();
     const res = await this.db.prepare(`delete from frames where id = ?`).bind(id).run();
     return (res.meta.changes ?? 0) > 0;
   }

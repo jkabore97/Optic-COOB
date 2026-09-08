@@ -76,7 +76,7 @@ export type NewOrder = Omit<
   "id" | "createdAt" | "updatedAt" | "readyAt" | "collectedAt" | "readySmsAt" | "status"
 >;
 
-export interface Store extends CatalogStore {
+export interface Store extends CatalogStore, CatalogModelStore {
   // Rendez-vous
   createAppointment(input: NewAppointment): Promise<Appointment>;
   getAppointment(id: string): Promise<Appointment | null>;
@@ -131,9 +131,11 @@ export interface CatalogFrameRecord {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  /** Date du modèle 3D (GLB) associé, null si aucun. */
+  modelUpdatedAt: string | null;
 }
 
-export type CatalogFrameInput = Omit<CatalogFrameRecord, "id" | "createdAt" | "updatedAt" | "imageMime">;
+export type CatalogFrameInput = Omit<CatalogFrameRecord, "id" | "createdAt" | "updatedAt" | "imageMime" | "modelUpdatedAt">;
 
 export interface FrameImageBlob {
   mime: string;
@@ -153,4 +155,18 @@ export interface CatalogStore {
   ): Promise<CatalogFrameRecord | null>;
   deleteFrame(id: string): Promise<boolean>;
   getFrameImage(id: string): Promise<FrameImageBlob | null>;
+}
+
+// ---- Modèles 3D des montures (GLB) ----
+
+export interface FrameModelBlob {
+  mime: string;
+  bytes: Uint8Array;
+  updatedAt: string;
+}
+
+export interface CatalogModelStore {
+  setFrameModel(frameId: string, model: { mime: string; bytes: Uint8Array }): Promise<void>;
+  deleteFrameModel(frameId: string): Promise<void>;
+  getFrameModel(frameId: string): Promise<FrameModelBlob | null>;
 }

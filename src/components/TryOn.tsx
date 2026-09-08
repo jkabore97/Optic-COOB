@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FaceLandmarker, NormalizedLandmark } from "@mediapipe/tasks-vision";
+import type { FaceObservation, TryOnEngine } from "@/lib/tryon-3d";
 import { COLOR_LABELS, COLOR_SWATCH, formatFcfa, frameImageUrl, type Frame } from "@/lib/frames";
 import {
   eyePose,
@@ -85,10 +86,21 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
   const [showAdjust, setShowAdjust] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<string | null>(null);
+  const [engineReady, setEngineReady] = useState(false);
+  const [modelLoading, setModelLoading] = useState(false);
+
+  /** Rendu 3D (modèle GLB ou monture procédurale) plutôt que photo à plat. */
+  const use3d = Boolean(frame.model) || frame.has3d;
+  const use3dRef = useRef(use3d);
+  use3dRef.current = use3d;
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const photoRef = useRef<HTMLImageElement>(null);
   const overlayRef = useRef<HTMLImageElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const engineRef = useRef<TryOnEngine | null>(null);
+  const faceRef = useRef<FaceObservation | null>(null);
+  const samplerRef = useRef<HTMLCanvasElement | null>(null);
   const landmarkerRef = useRef<FaceLandmarker | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef(0);
@@ -235,14 +247,12 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
         try {
           const res = lm.detectForVideo(video, performance.now());
           const face = res.faceLandmarks[0];
+          const matrix = res.facialTransformationMatrixes?.[0]?.data;
+          faceRef.current = face ? { landmarks: face, matrix } : null;
           const box = face ? paintedBox(video) : null;
-          const det = face && box ? toDetection(face, res.facialTransformationMatrixes?.[0]?.data, box, true) : null;
-          if (det) {
-            setDetection(det);
-            setFaceSeen(true);
-          } else {
-            setFaceSeen(false);
-          }
+          const det = face && box && !use3dRef.current ? toDetection(face, matrix, box, true) : null;
+          if (det) setDetection(det);
+          setFaceSeen(Boolean(face));
         } catch (err) {
           recovering = true;
           setFaceSeen(false);
@@ -283,8 +293,10 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
         res = landmarkerRef.current!.detect(img);
       }
       const face = res.faceLandmarks[0];
+      const matrix = res.facialTransformationMatrixes?.[0]?.data;
+      faceRef.current = face ? { landmarks: face, matrix } : null;
       const box = face ? paintedBox(img) : null;
-      const det = face && box ? toDetection(face, res.facialTransformationMatrixes?.[0]?.data, box, false) : null;
+      const det = face && box ? toDetection(face, matrix, box, false) : null;
       setStatus("ready");
       if (!det) {
         setFaceSeen(false);
@@ -303,6 +315,7 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
   const onPhotoChosen = (file: File | undefined) => {
     if (!file) return;
     stopCamera();
+    faceRef.current = null;
     setSnapshot(null);
     setDetection(null);
     setFaceSeen(false);
@@ -316,6 +329,7 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
 
   const switchToCamera = () => {
     setMode("camera");
+    faceRef.current = null;
     setDetection(null);
     setFaceSeen(false);
     setStatus("idle");
@@ -330,6 +344,79 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
       landmarkerRef.current = null;
     };
   }, [stopCamera]);
+
+  // ---- Moteur 3D : création quand la scène est prête en mode 3D ----
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!use3d || status !== "ready" || !canvas) return;
+    let disposed = false;
+    let raf = 0;
+    let engine: TryOnEngine | null = null;
+    let lastSample = 0;
+    import("@/lib/tryon-3d").then(({ createTryOnEngine, averageLuminance }) => {
+      if (disposed) return;
+      engine = createTryOnEngine(canvas);
+      engineRef.current = engine;
+      setEngineReady(true);
+      let w = 0;
+      let h = 0;
+      const loop = () => {
+        raf = requestAnimationFrame(loop);
+        if (!engine) return;
+        const cw = canvas.clientWidth;
+        const ch = canvas.clientHeight;
+        if (cw && ch && (cw !== w || ch !== h)) {
+          w = cw;
+          h = ch;
+          engine.resize(w, h);
+        }
+        const video = videoRef.current;
+        if (video && video.videoWidth && performance.now() - lastSample > 600) {
+          lastSample = performance.now();
+          samplerRef.current ??= document.createElement("canvas");
+          const lum = averageLuminance(video, samplerRef.current);
+          if (lum != null) engine.setExposure(Math.min(1.5, Math.max(0.7, 0.75 + (0.5 - lum) * 1.2)));
+        }
+        engine.update(faceRef.current);
+        engine.render();
+      };
+      loop();
+    });
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(raf);
+      engine?.dispose();
+      engineRef.current = null;
+      setEngineReady(false);
+    };
+  }, [use3d, status, mode]);
+
+  // ---- Modèle 3D de la monture courante ----
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engineReady || !engine || !use3d) return;
+    let cancelled = false;
+    setModelLoading(true);
+    import("@/lib/tryon-3d")
+      .then(async ({ loadGlbModel, proceduralModel }) => {
+        const model = frame.model
+          ? await loadGlbModel(frame.model.url)
+          : proceduralModel({ shape: frame.shape, material: frame.material, color: COLOR_SWATCH[frame.color], colorKey: frame.color, autoRotate: false, interactive: false });
+        if (cancelled) return;
+        engine.setModel(model);
+      })
+      .catch((err) => console.error("[3D] modèle", err))
+      .finally(() => {
+        if (!cancelled) setModelLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [engineReady, use3d, frame]);
+
+  useEffect(() => {
+    engineRef.current?.setAdjust(sizeAdj, yAdj);
+  }, [sizeAdj, yAdj, engineReady]);
 
   const placement = useMemo(
     () => (detection ? placeOverlay3D(detection.pose, detection.head, frame.image, sizeAdj, yAdj * frame.image.height) : null),
@@ -358,7 +445,7 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
   const takeSnapshot = () => {
     const src = mode === "camera" ? videoRef.current : photoRef.current;
     const overlay = overlayRef.current;
-    if (!src || !overlay || !placement) return;
+    if (!src || (!use3d && (!overlay || !placement))) return;
     const painted = paintedBox(src);
     if (!painted) return;
     const naturalW = src instanceof HTMLVideoElement ? src.videoWidth : src.naturalWidth;
@@ -378,7 +465,17 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
       ctx.scale(-1, 1);
     }
     ctx.drawImage(src, visX, visY, visW, visH, 0, 0, canvas.width, canvas.height);
-    // Monture : projection des coins (approximation affine de la perspective)
+    if (use3d && engineRef.current) {
+      const engine = engineRef.current;
+      engine.render();
+      const c = engine.canvas;
+      const kc = c.width / painted.width; // pixels du calque par pixel affiché
+      ctx.drawImage(c, Math.max(0, -painted.left) * kc, Math.max(0, -painted.top) * kc, src.clientWidth * kc, src.clientHeight * kc, 0, 0, canvas.width, canvas.height);
+      setSnapshot(canvas.toDataURL("image/jpeg", 0.92));
+      return;
+    }
+    if (!overlay || !placement) return;
+    // Monture photo : projection des coins (approximation affine de la perspective)
     const [tl, tr, bl] = projectCorners(placement, frame.image).map((p) => ({ x: (p.x - Math.max(0, -painted.left)) * k, y: (p.y - Math.max(0, -painted.top)) * k }));
     const { width: w, height: h } = frame.image;
     ctx.save();
@@ -411,8 +508,12 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
                   )
                 )}
                 <OverlayBox sourceRef={mode === "camera" ? videoRef : photoRef}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img ref={overlayRef} src={frameImageUrl(frame)} alt="" style={overlayStyle} />
+                  {use3d ? (
+                    <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img ref={overlayRef} src={frameImageUrl(frame)} alt="" style={overlayStyle} />
+                  )}
                 </OverlayBox>
               </div>
             </div>
@@ -439,6 +540,12 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
               </span>
             </div>
 
+            {status === "ready" && use3d && modelLoading && (
+              <div className="absolute inset-x-3 top-14 flex items-center gap-2 rounded-xl bg-ink/70 px-3 py-2 text-xs text-white backdrop-blur">
+                <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
+                <span>Chargement du modèle 3D…</span>
+              </div>
+            )}
             {status === "loading" && cameraOn && (
               <div className="absolute inset-x-3 top-14 flex items-center gap-2 rounded-xl bg-ink/70 px-3 py-2 text-xs text-white backdrop-blur">
                 <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
@@ -456,7 +563,7 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
                 <button
                   type="button"
                   onClick={takeSnapshot}
-                  disabled={!placement}
+                  disabled={use3d ? !faceSeen : !placement}
                   aria-label="Prendre une photo"
                   title="Prendre une photo"
                   className="pointer-events-auto flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-4 border-white/90 bg-white/20 backdrop-blur transition hover:bg-white/40 disabled:opacity-40"
@@ -498,11 +605,12 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
                 aria-selected={f.slug === frame.slug}
                 onClick={() => setFrame(f)}
                 title={`${f.name} ${COLOR_LABELS[f.color]}`}
-                className={`flex h-16 w-24 shrink-0 items-center justify-center rounded-xl border-2 bg-paper-2 p-1.5 transition ${
+                className={`relative flex h-16 w-24 shrink-0 items-center justify-center rounded-xl border-2 bg-paper-2 p-1.5 transition ${
                   f.slug === frame.slug ? "border-brand-600 bg-white" : "border-transparent hover:border-brand-300"
                 }`}
               >
                 <Image src={frameImageUrl(f)} alt="" width={f.image.width} height={f.image.height} unoptimized className="max-h-full w-auto max-w-full object-contain" />
+                {(f.model || f.has3d) && <span className="absolute right-1 top-1 rounded-full bg-brand-500 px-1.5 text-[9px] font-bold text-ink">3D</span>}
               </button>
             ))}
           </div>
