@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { FrameCard } from "@/components/FrameCard";
+import { Parallax } from "@/components/Parallax";
+import { Reveal } from "@/components/Reveal";
 import { AGENCIES, BRANDS, BUSINESS, OPENING_HOURS, WEEKDAY_LABELS, type Weekday } from "@/lib/config";
 import { getCatalog } from "@/lib/catalog";
 
@@ -54,15 +56,15 @@ export default async function HomePage() {
       <section className="relative overflow-hidden bg-white">
         <div className="container-x grid items-center gap-10 py-12 md:grid-cols-2 md:py-16">
           <div className="order-2 md:order-1">
-            <p className="eyebrow">{BUSINESS.legalName}</p>
-            <h1 className="mt-3 text-4xl font-bold tracking-tight text-ink sm:text-5xl">
+            <p className="eyebrow rise-in">{BUSINESS.legalName}</p>
+            <h1 className="rise-in rise-in-1 mt-3 text-4xl font-bold tracking-tight text-ink sm:text-5xl">
               Signe ton style. <span className="text-brand-600">Vois mieux.</span>
             </h1>
-            <p className="mt-5 max-w-lg text-lg text-ink-2">
+            <p className="rise-in rise-in-2 mt-5 max-w-lg text-lg text-ink-2">
               Examen de la vue, montures de grandes marques et verres certifiés, à Ouagadougou et Bobo-Dioulasso.
               Réservez en ligne, essayez vos montures depuis votre téléphone et recevez un SMS quand vos lunettes sont prêtes.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="rise-in rise-in-3 mt-8 flex flex-wrap gap-3">
               <Link href="/rendez-vous" className="btn-primary">
                 Prendre rendez-vous
               </Link>
@@ -70,7 +72,7 @@ export default async function HomePage() {
                 Essayer des montures en ligne
               </Link>
             </div>
-            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-ink-2">
+            <div className="rise-in rise-in-4 mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-ink-2">
               <a href={BUSINESS.reviewsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-brand-700">
                 <span className="text-accent-500" aria-hidden="true">★★★★★</span>
                 <span>{BUSINESS.reviewCount}+ avis Google</span>
@@ -80,19 +82,21 @@ export default async function HomePage() {
               </span>
             </div>
           </div>
-          <div className="relative order-1 md:order-2">
+          <div className="relative order-1 md:order-2 rise-in rise-in-1">
             <div className="absolute -right-6 -top-6 h-40 w-40 rounded-full bg-brand-500/25 blur-2xl" aria-hidden="true" />
             <div className="relative grid grid-cols-2 gap-3">
-              <Image
-                src="/images/signature.jpg"
-                alt="Campagne COOB Signature"
-                width={1440}
-                height={1916}
-                priority
-                sizes="(min-width: 768px) 25vw, 50vw"
-                className="h-full w-full rounded-3xl object-cover shadow-soft"
-              />
-              <div className="grid gap-3">
+              <Parallax speed={0.06}>
+                <Image
+                  src="/images/signature.jpg"
+                  alt="Campagne COOB Signature"
+                  width={1440}
+                  height={1916}
+                  priority
+                  sizes="(min-width: 768px) 25vw, 50vw"
+                  className="h-full w-full rounded-3xl object-cover shadow-soft"
+                />
+              </Parallax>
+              <Parallax speed={0.14} className="grid gap-3">
                 <Image
                   src="/images/campagne-signe-ton-style.jpg"
                   alt="Campagne #SigneTonStyle"
@@ -110,7 +114,7 @@ export default async function HomePage() {
                   sizes="(min-width: 768px) 25vw, 50vw"
                   className="w-full rounded-3xl object-cover shadow-soft"
                 />
-              </div>
+              </Parallax>
             </div>
             <p className="absolute bottom-4 left-4 rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-ink shadow-soft backdrop-blur">
               {BUSINESS.tagline}
@@ -121,21 +125,25 @@ export default async function HomePage() {
 
       {/* Marques */}
       <section className="border-y border-ink/8 bg-paper-2">
-        <div className="container-x py-5">
+        <div className="py-5">
           <p className="text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-3">Les grandes marques, chez COOB</p>
-          <ul className="mt-3 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm font-semibold text-ink-2">
-            {BRANDS.map((b) => (
-              <li key={b}>{b}</li>
-            ))}
-          </ul>
+          <div className="relative mt-3 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
+            <ul className="marquee flex w-max items-center gap-10 whitespace-nowrap text-sm font-semibold text-ink-2" aria-label="Marques distribuées">
+              {[...BRANDS, ...BRANDS].map((b, i) => (
+                <li key={`${b}-${i}`} aria-hidden={i >= BRANDS.length}>{b}</li>
+              ))}
+            </ul>
+          </div>
         </div>
       </section>
 
       {/* Services */}
       <section className="container-x py-16">
-        <p className="eyebrow">Nos services</p>
-        <h2 className="mt-2 text-3xl font-bold tracking-tight">Tout pour vos yeux, au même endroit</h2>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Reveal>
+          <p className="eyebrow">Nos services</p>
+          <h2 className="mt-2 text-3xl font-bold tracking-tight">Tout pour vos yeux, au même endroit</h2>
+        </Reveal>
+        <Reveal stagger={90} className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {SERVICES.map((s) => (
             <div key={s.title} className="card flex flex-col p-5">
               <span className="mb-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-brand-700">✓</span>
@@ -146,14 +154,14 @@ export default async function HomePage() {
               </Link>
             </div>
           ))}
-        </div>
+        </Reveal>
       </section>
 
       {/* Catalogue : uniquement les vraies montures ajoutées dans l'espace équipe */}
       {hasRealFrames && (
       <section className="bg-white py-16">
         <div className="container-x">
-          <div className="flex flex-wrap items-end justify-between gap-4">
+          <Reveal className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="eyebrow">Montures</p>
               <h2 className="mt-2 text-3xl font-bold tracking-tight">Nos modèles du moment</h2>
@@ -161,12 +169,12 @@ export default async function HomePage() {
             <Link href="/montures" className="btn-outline">
               Voir tout le catalogue
             </Link>
-          </div>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          </Reveal>
+          <Reveal stagger={90} className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {featured.map((f) => (
               <FrameCard key={f.slug} frame={f} />
             ))}
-          </div>
+          </Reveal>
         </div>
       </section>
 
@@ -175,9 +183,11 @@ export default async function HomePage() {
       {/* Steps */}
       <section className="bg-brand-500 py-16 text-ink">
         <div className="container-x">
-          <p className="eyebrow text-brand-900">Comment ça marche</p>
-          <h2 className="mt-2 text-3xl font-bold tracking-tight">Trois étapes, zéro tracas</h2>
-          <ol className="mt-8 grid gap-4 md:grid-cols-3">
+          <Reveal>
+            <p className="eyebrow text-brand-900">Comment ça marche</p>
+            <h2 className="mt-2 text-3xl font-bold tracking-tight">Trois étapes, zéro tracas</h2>
+          </Reveal>
+          <Reveal as="ol" stagger={120} className="mt-8 grid gap-4 md:grid-cols-3">
             {STEPS.map((s) => (
               <li key={s.n} className="rounded-2xl bg-white/85 p-6 backdrop-blur">
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-ink text-sm font-bold text-brand-300">{s.n}</span>
@@ -185,7 +195,7 @@ export default async function HomePage() {
                 <p className="mt-2 text-sm text-ink-2">{s.text}</p>
               </li>
             ))}
-          </ol>
+          </Reveal>
         </div>
       </section>
 
@@ -193,9 +203,11 @@ export default async function HomePage() {
       <section id="contact" className="container-x py-16">
         <div className="grid gap-10 lg:grid-cols-5">
           <div className="lg:col-span-3">
-            <p className="eyebrow">Nos agences</p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight">Trois agences pour vous accueillir</h2>
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            <Reveal>
+              <p className="eyebrow">Nos agences</p>
+              <h2 className="mt-2 text-3xl font-bold tracking-tight">Trois agences pour vous accueillir</h2>
+            </Reveal>
+            <Reveal stagger={100} className="mt-8 grid gap-4 sm:grid-cols-3">
               {AGENCIES.map((a) => (
                 <div key={a.id} className={`card p-5 ${a.main ? "ring-2 ring-brand-500" : ""}`}>
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">{a.city}</p>
@@ -208,17 +220,17 @@ export default async function HomePage() {
                   </div>
                 </div>
               ))}
-            </div>
-            <div className="mt-6 flex flex-wrap gap-3">
+            </Reveal>
+            <Reveal delay={150} className="mt-6 flex flex-wrap gap-3">
               <a href={`https://wa.me/${BUSINESS.whatsapp}`} target="_blank" rel="noreferrer" className="btn-lime">
                 WhatsApp {BUSINESS.whatsappDisplay}
               </a>
               <Link href="/rendez-vous" className="btn-primary">
                 Prendre rendez-vous
               </Link>
-            </div>
+            </Reveal>
           </div>
-          <div className="lg:col-span-2">
+          <Reveal variant="right" delay={100} className="lg:col-span-2">
             <div className="card overflow-hidden">
               <Image src="/images/hero-store.jpg" alt="Une cliente essaie une monture avec un opticien COOB" width={1440} height={969} sizes="(min-width: 1024px) 40vw, 100vw" className="aspect-[4/3] w-full object-cover" />
               <div className="p-5">
@@ -230,7 +242,7 @@ export default async function HomePage() {
                 </ul>
               </div>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
     </>

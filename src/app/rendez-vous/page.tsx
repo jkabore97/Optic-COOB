@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { BookingForm } from "@/components/BookingForm";
+import { Reveal } from "@/components/Reveal";
 import { AGENCIES } from "@/lib/config";
 
 export const metadata: Metadata = {
@@ -26,7 +27,7 @@ export default async function BookingPage({ searchParams }: PageProps<"/rendez-v
             <BookingForm initialReason={first(sp.motif)} initialAgency={first(sp.agence)} />
           </div>
         </div>
-        <aside className="space-y-4 lg:pt-24">
+        <Reveal as="aside" stagger={120} className="space-y-4 lg:pt-24">
           <div className="card p-5">
             <h2 className="font-semibold">Ce qu&apos;il faut apporter</h2>
             <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm text-ink-2">
@@ -52,7 +53,7 @@ export default async function BookingPage({ searchParams }: PageProps<"/rendez-v
               ))}
             </ul>
           </div>
-        </aside>
+        </Reveal>
       </div>
     </div>
   );
