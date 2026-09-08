@@ -1,8 +1,11 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { newId } from "../ids";
 import type {
   Appointment,
+  CatalogFrameInput,
+  CatalogFrameRecord,
+  FrameImageBlob,
   NewAppointment,
   NewOrder,
   Order,
@@ -15,9 +18,10 @@ interface FileData {
   appointments: Appointment[];
   orders: Order[];
   sms: SmsLog[];
+  frames: CatalogFrameRecord[];
 }
 
-const EMPTY: FileData = { appointments: [], orders: [], sms: [] };
+const EMPTY: FileData = { appointments: [], orders: [], sms: [], frames: [] };
 
 /**
  * Stockage JSON sur disque, pour le développement local et les petites installations
@@ -169,5 +173,82 @@ export class FileStore implements Store {
   async listSms(limit = 50): Promise<SmsLog[]> {
     const data = await this.read();
     return data.sms.slice(-limit).reverse();
+  }
+
+  // ---- Catalogue ----
+
+  private imagePath(id: string): string {
+    return path.join(path.dirname(this.file), "frames", `${id}.bin`);
+  }
+
+  private async writeImage(id: string, image: { mime: string; bytes: Uint8Array }): Promise<void> {
+    const file = this.imagePath(id);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, image.bytes);
+  }
+
+  async listFrames(opts: { includeInactive?: boolean } = {}): Promise<CatalogFrameRecord[]> {
+    const data = await this.read();
+    return data.frames
+      .filter((f) => opts.includeInactive || f.active)
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
+  }
+
+  async getFrame(id: string): Promise<CatalogFrameRecord | null> {
+    const data = await this.read();
+    return data.frames.find((f) => f.id === id) ?? null;
+  }
+
+  async getFrameBySlug(slug: string): Promise<CatalogFrameRecord | null> {
+    const data = await this.read();
+    return data.frames.find((f) => f.slug === slug) ?? null;
+  }
+
+  async createFrame(input: CatalogFrameInput, image: { mime: string; bytes: Uint8Array } | null): Promise<CatalogFrameRecord> {
+    const id = newId();
+    if (image) await this.writeImage(id, image);
+    return this.mutate((data) => {
+      const now = new Date().toISOString();
+      const frame: CatalogFrameRecord = { ...input, id, imageMime: image?.mime ?? null, createdAt: now, updatedAt: now };
+      data.frames.push(frame);
+      return frame;
+    });
+  }
+
+  async updateFrame(
+    id: string,
+    patch: Partial<CatalogFrameInput>,
+    image?: { mime: string; bytes: Uint8Array } | null,
+  ): Promise<CatalogFrameRecord | null> {
+    if (image) await this.writeImage(id, image);
+    return this.mutate((data) => {
+      const frame = data.frames.find((f) => f.id === id);
+      if (!frame) return null;
+      Object.assign(frame, patch, { updatedAt: new Date().toISOString() });
+      if (image) frame.imageMime = image.mime;
+      return frame;
+    });
+  }
+
+  async deleteFrame(id: string): Promise<boolean> {
+    const removed = await this.mutate((data) => {
+      const i = data.frames.findIndex((f) => f.id === id);
+      if (i < 0) return false;
+      data.frames.splice(i, 1);
+      return true;
+    });
+    if (removed) await rm(this.imagePath(id), { force: true });
+    return removed;
+  }
+
+  async getFrameImage(id: string): Promise<FrameImageBlob | null> {
+    const frame = await this.getFrame(id);
+    if (!frame?.imageMime) return null;
+    try {
+      const bytes = await readFile(this.imagePath(id));
+      return { mime: frame.imageMime, bytes, updatedAt: frame.updatedAt };
+    } catch {
+      return null;
+    }
   }
 }

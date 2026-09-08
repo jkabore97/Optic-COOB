@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CatalogFilters } from "@/components/CatalogFilters";
 import { FrameCard } from "@/components/FrameCard";
-import { FRAMES } from "@/lib/frames";
+import { getCatalog } from "@/lib/catalog";
 
 export const metadata: Metadata = {
   title: "Montures",
@@ -19,7 +19,7 @@ export default async function CatalogPage({ searchParams }: PageProps<"/montures
   const genre = first(sp.genre);
   const prix = Number(first(sp.prix)) || 0;
 
-  const frames = FRAMES.filter(
+  const frames = (await getCatalog()).filter(
     (f) =>
       (!forme || f.shape === forme) &&
       (!matiere || f.material === matiere) &&

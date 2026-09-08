@@ -10,6 +10,7 @@ export function FrameViewer({ frame }: { frame: Frame }) {
   const [mode, setMode] = useState<"2d" | "3d">("2d");
   return (
     <div className="card relative overflow-hidden bg-paper-2">
+      {frame.has3d && (
       <div className="absolute right-3 top-3 z-10 flex gap-1 rounded-full bg-white p-1 shadow-soft" role="tablist" aria-label="Type de visuel">
         {(["2d", "3d"] as const).map((m) => (
           <button
@@ -24,9 +25,10 @@ export function FrameViewer({ frame }: { frame: Frame }) {
           </button>
         ))}
       </div>
-      {mode === "2d" ? (
+      )}
+      {mode === "2d" || !frame.has3d ? (
         <div className="flex aspect-[5/3] items-center justify-center p-8">
-          <Image src={frameImageUrl(frame)} alt={`${frame.name} ${COLOR_LABELS[frame.color]}`} width={1000} height={400} unoptimized priority className="h-auto w-full" />
+          <Image src={frameImageUrl(frame)} alt={`${frame.name} ${COLOR_LABELS[frame.color]}`} width={frame.image.width} height={frame.image.height} unoptimized priority className="max-h-full w-auto max-w-full object-contain" />
         </div>
       ) : (
         <div className="aspect-[5/3]">

@@ -76,7 +76,7 @@ export type NewOrder = Omit<
   "id" | "createdAt" | "updatedAt" | "readyAt" | "collectedAt" | "readySmsAt" | "status"
 >;
 
-export interface Store {
+export interface Store extends CatalogStore {
   // Rendez-vous
   createAppointment(input: NewAppointment): Promise<Appointment>;
   getAppointment(id: string): Promise<Appointment | null>;
@@ -100,4 +100,57 @@ export interface Store {
   // SMS
   logSms(entry: Omit<SmsLog, "id" | "createdAt">): Promise<SmsLog>;
   listSms(limit?: number): Promise<SmsLog[]>;
+}
+
+// ---- Catalogue de montures (géré dans l'espace équipe) ----
+
+export interface CatalogFrameRecord {
+  id: string;
+  slug: string;
+  name: string;
+  collection: string;
+  shape: string;
+  material: string;
+  color: string;
+  gender: string;
+  priceFcfa: number;
+  sizeLens: number;
+  sizeBridge: number;
+  sizeTemple: number;
+  description: string;
+  tags: string[];
+  /** Type MIME de la photo (null si aucune photo). */
+  imageMime: string | null;
+  imageWidth: number;
+  imageHeight: number;
+  anchorLx: number;
+  anchorLy: number;
+  anchorRx: number;
+  anchorRy: number;
+  active: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CatalogFrameInput = Omit<CatalogFrameRecord, "id" | "createdAt" | "updatedAt" | "imageMime">;
+
+export interface FrameImageBlob {
+  mime: string;
+  bytes: Uint8Array;
+  updatedAt: string;
+}
+
+export interface CatalogStore {
+  listFrames(opts?: { includeInactive?: boolean }): Promise<CatalogFrameRecord[]>;
+  getFrame(id: string): Promise<CatalogFrameRecord | null>;
+  getFrameBySlug(slug: string): Promise<CatalogFrameRecord | null>;
+  createFrame(input: CatalogFrameInput, image: { mime: string; bytes: Uint8Array } | null): Promise<CatalogFrameRecord>;
+  updateFrame(
+    id: string,
+    patch: Partial<CatalogFrameInput>,
+    image?: { mime: string; bytes: Uint8Array } | null,
+  ): Promise<CatalogFrameRecord | null>;
+  deleteFrame(id: string): Promise<boolean>;
+  getFrameImage(id: string): Promise<FrameImageBlob | null>;
 }

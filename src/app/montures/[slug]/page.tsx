@@ -3,24 +3,21 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FrameCard } from "@/components/FrameCard";
 import { FrameViewer } from "@/components/FrameViewer";
+import { getCatalog, getCatalogFrame } from "@/lib/catalog";
 import {
   COLOR_LABELS,
   COLOR_SWATCH,
-  FRAMES,
   GENDER_LABELS,
   MATERIAL_LABELS,
   SHAPE_LABELS,
   formatFcfa,
-  getFrame,
 } from "@/lib/frames";
 
-export function generateStaticParams() {
-  return FRAMES.map((f) => ({ slug: f.slug }));
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: PageProps<"/montures/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const frame = getFrame(slug);
+  const frame = await getCatalogFrame(slug);
   if (!frame) return {};
   return {
     title: `${frame.name} ${COLOR_LABELS[frame.color]}`,
@@ -30,11 +27,12 @@ export async function generateMetadata({ params }: PageProps<"/montures/[slug]">
 
 export default async function FramePage({ params }: PageProps<"/montures/[slug]">) {
   const { slug } = await params;
-  const frame = getFrame(slug);
+  const catalog = await getCatalog();
+  const frame = catalog.find((f) => f.slug === slug);
   if (!frame) notFound();
 
-  const variants = FRAMES.filter((f) => f.name === frame.name && f.slug !== frame.slug);
-  const similar = FRAMES.filter((f) => f.slug !== frame.slug && f.name !== frame.name && f.shape === frame.shape).slice(0, 3);
+  const variants = catalog.filter((f) => f.name === frame.name && f.slug !== frame.slug);
+  const similar = catalog.filter((f) => f.slug !== frame.slug && f.name !== frame.name && f.shape === frame.shape).slice(0, 3);
 
   return (
     <div className="container-x py-10">
@@ -60,7 +58,9 @@ export default async function FramePage({ params }: PageProps<"/montures/[slug]"
             <div><dt className="text-ink-3">Forme</dt><dd className="font-medium">{SHAPE_LABELS[frame.shape]}</dd></div>
             <div><dt className="text-ink-3">Matière</dt><dd className="font-medium">{MATERIAL_LABELS[frame.material]}</dd></div>
             <div><dt className="text-ink-3">Pour</dt><dd className="font-medium">{GENDER_LABELS[frame.gender]}</dd></div>
-            <div><dt className="text-ink-3">Taille (verre / pont / branche)</dt><dd className="font-medium">{frame.size.join(" – ")} mm</dd></div>
+            {frame.size.some(Boolean) && (
+              <div><dt className="text-ink-3">Taille (verre / pont / branche)</dt><dd className="font-medium">{frame.size.join(" – ")} mm</dd></div>
+            )}
             <div className="col-span-2">
               <dt className="text-ink-3">Coloris</dt>
               <dd className="mt-1 flex flex-wrap gap-2">

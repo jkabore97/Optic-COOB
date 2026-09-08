@@ -5,17 +5,20 @@ Site vitrine et outils métier pour **COOB, Centre d'Optique et d'Optométrie du
 
 Fonctionnalités :
 
-- **Catalogue de montures** avec filtres (forme, matière, genre, budget) et fiches détaillées.
+- **Catalogue de montures** géré dans l'espace équipe (photo du produit, prix, caractéristiques),
+  avec filtres (forme, matière, genre, budget) et fiches détaillées. Tant qu'aucune monture n'a été
+  ajoutée, le site affiche des modèles de démonstration.
 - **Essayage virtuel** : détection du visage dans le navigateur (MediaPipe Face Landmarker),
-  superposition de la monture en direct (caméra) ou sur une photo, capture à partager.
-  Aucune image n'est envoyée au serveur.
+  superposition de la **photo réelle de la monture** en direct (caméra) ou sur une photo, capture à
+  partager. Aucune image n'est envoyée au serveur. Chaque monture est calibrée une fois dans
+  l'espace équipe (position des deux centres de verres sur la photo).
 - **Prise de rendez-vous** pour un examen de vue, par agence, avec créneaux en temps réel,
   SMS de confirmation immédiat et SMS de rappel la veille.
 - **Suivi de commande** côté client (référence + téléphone).
 - **Vue 3D animée** des montures (three.js, modèles construits à partir du catalogue) :
   rotation automatique sur la page d'accueil, manipulation au doigt sur chaque fiche.
-- **Espace équipe** (`/admin`) : rendez-vous du jour, création et suivi des commandes, et
-  **SMS automatique au client quand ses lunettes sont prêtes**. Journal des SMS.
+- **Espace équipe** (`/admin`) : montures du catalogue, rendez-vous du jour, création et suivi des
+  commandes, et **SMS automatique au client quand ses lunettes sont prêtes**. Journal des SMS.
 
 Stack : Next.js 16 (App Router), TypeScript, Tailwind CSS 4, Zod, three.js,
 `@mediapipe/tasks-vision`, Cloudflare D1 / PostgreSQL (`postgres`, pure JS), Vitest.
@@ -46,15 +49,27 @@ npm run build
 
 Tout ce qui est propre à COOB est dans `src/lib/config.ts` : agences (noms, téléphones),
 horaires d'ouverture, durée et capacité des créneaux, motifs de rendez-vous, marques.
-Le catalogue est dans `src/lib/frames.ts` (prix indicatifs à ajuster) ; les visuels des montures
-sont générés par `npm run frames` dans `public/frames/`.
+Les montures de démonstration sont dans `src/lib/frames.ts` ; leurs visuels sont générés par
+`npm run frames` dans `public/frames/`. Les vraies montures se gèrent dans `/admin/montures`.
+
+### Ajouter une monture (espace équipe → Montures)
+
+1. **Photo** : de face, monture ouverte, sur fond blanc ou uni. L'option « Rendre le fond clair
+   transparent » détoure automatiquement les photos sur fond blanc (un PNG déjà détouré donne le
+   meilleur résultat).
+2. **Calibrage** : cliquer sur le centre du verre gauche, puis du verre droit. Ces deux points sont
+   alignés sur les pupilles lors de l'essayage virtuel.
+3. **Fiche** : nom, marque, prix, forme, matière, coloris, tailles, description.
+
+Les photos sont stockées dans la base de données et servies par `/api/frames/:id/image` avec un
+cache long.
 
 Variables d'environnement (voir `.env.example`) :
 
 | Variable | Rôle |
 | --- | --- |
 | `ADMIN_PASSWORD` | Active l'espace équipe (obligatoire en production). |
-| `DATABASE_URL` | PostgreSQL (Supabase, Neon…). Appliquer `src/lib/db/schema.sql` une fois. Sur Cloudflare, le binding D1 `DB` est utilisé à la place ; sinon : fichier JSON local. |
+| `DATABASE_URL` (ou `POSTGRES_URL`) | PostgreSQL (Neon via Vercel Storage, Supabase…). Les tables sont créées automatiquement. Sur Cloudflare, le binding D1 `DB` est utilisé à la place ; sinon : fichier JSON local. |
 | `SMS_PROVIDER` | `console` (défaut), `twilio` ou `orange`. |
 | `TWILIO_*` / `ORANGE_*` | Identifiants du fournisseur SMS choisi. |
 | `CRON_SECRET` | Protège `/api/cron/reminders` (rappels de RDV la veille, planifié dans `vercel.json`). |
@@ -84,7 +99,19 @@ rendez-vous ou d'une commande, et le bouton « Renvoyer le SMS » permet de rée
 
 ## Déploiement
 
-### Cloudflare Workers (configuration actuelle)
+### Vercel (configuration actuelle)
+
+Le site est déployé sur Vercel depuis la branche `main`. Le système de fichiers de Vercel étant
+éphémère, une base PostgreSQL est indispensable pour conserver les montures, rendez-vous et
+commandes :
+
+1. Tableau de bord Vercel → projet → **Storage** → *Create Database* → **Neon (Postgres)**, plan
+   gratuit. Vercel ajoute automatiquement `DATABASE_URL` / `POSTGRES_URL` au projet.
+2. **Settings → Environment Variables** : `ADMIN_PASSWORD` (espace équipe) et `CRON_SECRET`
+   (rappels de rendez-vous, cron dans `vercel.json`).
+3. Redéployer (*Deployments* → *Redeploy*). Les tables sont créées au premier accès.
+
+### Cloudflare Workers
 
 Le site tourne sur Cloudflare Workers via l'adaptateur [OpenNext](https://opennext.js.org/cloudflare),
 avec une base **D1** (`optic-coob`) pour les rendez-vous, commandes et le journal SMS, et un
@@ -105,13 +132,7 @@ Secrets à définir une fois (*Settings* → *Variables and Secrets*, ou `npx wr
 et les variables associées). La variable `NEXT_PUBLIC_SITE_URL` de `wrangler.jsonc` doit
 pointer vers l'URL réelle du site (domaine personnalisé ou `*.workers.dev`).
 
-Le schéma D1 a déjà été appliqué sur la base de production. Pour le rejouer ou l'appliquer
-en local :
-
-```bash
-npx wrangler d1 execute optic-coob --remote --file=src/lib/db/schema.sqlite.sql
-npx wrangler d1 execute optic-coob --local  --file=src/lib/db/schema.sqlite.sql   # dev local
-```
+Les tables D1 sont créées automatiquement au premier accès.
 
 Test en local, identique à la production (worker + D1 locale) :
 
@@ -122,12 +143,10 @@ npm run preview:cf
 Depuis un poste connecté à Cloudflare (`npx wrangler login`), `npm run deploy:cf` construit et
 déploie en une commande.
 
-### Vercel ou serveur classique
+### Serveur classique
 
-Le projet fonctionne aussi sur Vercel (cron des rappels dans `vercel.json`) : le système de
-fichiers y est éphémère, définir `DATABASE_URL` (Supabase par exemple) et appliquer
-`src/lib/db/schema.sql`. Sur un serveur classique (VPS), le stockage JSON local suffit pour
-démarrer ; `DATA_FILE` permet de choisir l'emplacement du fichier.
+Sur un serveur classique (VPS), le stockage JSON local suffit pour démarrer ; `DATA_FILE` permet
+de choisir l'emplacement du fichier (les photos sont enregistrées à côté, dans `data/frames/`).
 
 ## Structure
 
@@ -136,7 +155,9 @@ src/app/            pages (accueil, montures, essayage, rendez-vous, suivi, admi
 src/components/     en-tête, pied de page, TryOn, BookingForm, OrderTracker, admin
 src/lib/config.ts   agences, horaires, réglages métier
 src/lib/frames.ts   catalogue
-src/lib/db/         stockage (Cloudflare D1, PostgreSQL ou fichier JSON) + schémas SQL
+src/lib/catalog.ts  catalogue public (base de données, ou démonstration si vide)
+src/lib/db/         stockage (Cloudflare D1, PostgreSQL ou fichier JSON) + schémas SQL (schema.ts)
+src/lib/tryon-math.ts  placement d'un visuel sur les pupilles ; src/lib/image-tools.ts  détourage
 src/lib/sms/        fournisseurs SMS et modèles de messages
 src/lib/glasses-scene.ts  scène 3D three.js ; src/lib/lens-outline.ts  contours des verres
 cloudflare/         point d'entrée du Worker (site + cron) ; wrangler.jsonc, open-next.config.ts
@@ -147,6 +168,6 @@ tests/              tests unitaires (Vitest)
 ## À compléter par COOB
 
 - Adresses exactes et liens Google Maps des trois agences, horaires réels.
-- Prix et références réelles des montures (`src/lib/frames.ts`), visuels photo si disponibles.
+- Vraies montures avec photos, dans l'espace équipe (`/admin/montures`).
 - Identifiants SMS (Orange ou Twilio) et mot de passe de l'espace équipe.
 - Liens Facebook / Instagram.

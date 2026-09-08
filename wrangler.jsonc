@@ -10,7 +10,7 @@
   },
   "observability": { "enabled": true },
   // Base de données D1 (bookings, commandes, journal SMS).
-  // Schéma : npx wrangler d1 execute optic-coob --remote --file=src/lib/db/schema.sqlite.sql
+  // Les tables sont créées automatiquement au premier accès.
   "d1_databases": [
     {
       "binding": "DB",

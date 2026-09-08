@@ -6,7 +6,9 @@ import { z } from "zod";
 import { checkPassword, clearAdminCookie, requireAdmin, setAdminCookie } from "@/lib/auth";
 import { AGENCIES, MAIN_AGENCY } from "@/lib/config";
 import { ORDER_STATUS_FLOW, getStore, type AppointmentStatus, type OrderStatus } from "@/lib/db";
+import { COLOR_LABELS, GENDER_LABELS, MATERIAL_LABELS, SHAPE_LABELS, type FrameColor } from "@/lib/frames";
 import { orderCode } from "@/lib/ids";
+import { slugify } from "@/lib/slug";
 import { normalizeBurkinaPhone } from "@/lib/phone";
 import { orderReadySms, orderReceivedSms, sendSms } from "@/lib/sms";
 
@@ -121,4 +123,128 @@ export async function setAppointmentStatusAction(fd: FormData) {
   await getStore().updateAppointment(id, { status });
   revalidatePath("/admin");
   revalidatePath("/admin/rendez-vous");
+}
+
+// ---- Catalogue de montures ----
+
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+const FrameSchema = z.object({
+  id: z.string().optional().default(""),
+  name: z.string().min(2).max(120),
+  collection: z.string().max(80).default(""),
+  shape: z.enum(Object.keys(SHAPE_LABELS) as [string, ...string[]]),
+  material: z.enum(Object.keys(MATERIAL_LABELS) as [string, ...string[]]),
+  color: z.enum(Object.keys(COLOR_LABELS) as [string, ...string[]]),
+  gender: z.enum(Object.keys(GENDER_LABELS) as [string, ...string[]]),
+  priceFcfa: z.coerce.number().int().nonnegative(),
+  sizeLens: z.coerce.number().int().nonnegative().default(0),
+  sizeBridge: z.coerce.number().int().nonnegative().default(0),
+  sizeTemple: z.coerce.number().int().nonnegative().default(0),
+  description: z.string().max(1000).default(""),
+  tags: z.string().max(200).default(""),
+  sortOrder: z.coerce.number().int().default(0),
+  active: z.string().optional(),
+  imageData: z.string().default(""),
+  imageWidth: z.coerce.number().int().nonnegative().default(0),
+  imageHeight: z.coerce.number().int().nonnegative().default(0),
+  anchorLx: z.coerce.number().default(0),
+  anchorLy: z.coerce.number().default(0),
+  anchorRx: z.coerce.number().default(0),
+  anchorRy: z.coerce.number().default(0),
+});
+
+function decodeDataUrl(dataUrl: string): { mime: string; bytes: Uint8Array } | null {
+  const m = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(dataUrl);
+  if (!m) return null;
+  return { mime: m[1], bytes: new Uint8Array(Buffer.from(m[2], "base64")) };
+}
+
+async function uniqueSlug(base: string, ownId: string | null): Promise<string> {
+  const store = getStore();
+  let slug = base || "monture";
+  for (let i = 2; i < 100; i++) {
+    const existing = await store.getFrameBySlug(slug);
+    if (!existing || existing.id === ownId) return slug;
+    slug = `${base}-${i}`;
+  }
+  return `${base}-${Date.now()}`;
+}
+
+export async function saveFrameAction(_prev: { error?: string } | undefined, fd: FormData) {
+  await requireAdmin();
+  const raw = Object.fromEntries(
+    [...fd.entries()].filter(([, v]) => typeof v === "string").map(([k, v]) => [k, (v as string).trim()]),
+  );
+  const parsed = FrameSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { error: `Vérifiez le formulaire : ${parsed.error.issues[0]?.path.join(".")} ${parsed.error.issues[0]?.message}` };
+  }
+  const d = parsed.data;
+  const image = d.imageData ? decodeDataUrl(d.imageData) : null;
+  if (d.imageData && !image) return { error: "Format d'image non pris en charge (PNG, JPEG ou WebP)." };
+  if (image && image.bytes.byteLength > MAX_IMAGE_BYTES) return { error: "Photo trop lourde (4 Mo maximum)." };
+  if (!d.id && !image) return { error: "Ajoutez une photo de la monture." };
+  if (d.imageWidth && (d.anchorLx === d.anchorRx && d.anchorLy === d.anchorRy)) {
+    return { error: "Calibrez les deux centres de verres sur la photo." };
+  }
+
+  const store = getStore();
+  const slug = await uniqueSlug(slugify(`${d.name} ${COLOR_LABELS[d.color as FrameColor] ?? d.color}`), d.id || null);
+  const input = {
+    slug,
+    name: d.name,
+    collection: d.collection,
+    shape: d.shape,
+    material: d.material,
+    color: d.color,
+    gender: d.gender,
+    priceFcfa: d.priceFcfa,
+    sizeLens: d.sizeLens,
+    sizeBridge: d.sizeBridge,
+    sizeTemple: d.sizeTemple,
+    description: d.description,
+    tags: d.tags.split(",").map((t) => t.trim()).filter(Boolean),
+    imageWidth: d.imageWidth,
+    imageHeight: d.imageHeight,
+    anchorLx: d.anchorLx,
+    anchorLy: d.anchorLy,
+    anchorRx: d.anchorRx,
+    anchorRy: d.anchorRy,
+    active: d.active === "1",
+    sortOrder: d.sortOrder,
+  };
+
+  let message: string;
+  if (d.id) {
+    const updated = await store.updateFrame(d.id, input, image);
+    if (!updated) return { error: "Monture introuvable." };
+    message = `« ${updated.name} » mise à jour.`;
+  } else {
+    const created = await store.createFrame(input, image);
+    message = `« ${created.name} » ajoutée au catalogue.`;
+  }
+  revalidatePath("/");
+  revalidatePath("/montures");
+  revalidatePath("/essayage");
+  redirect(`/admin/montures?ok=${encodeURIComponent(message)}`);
+}
+
+export async function deleteFrameAction(fd: FormData) {
+  await requireAdmin();
+  const id = str(fd, "id");
+  if (id) await getStore().deleteFrame(id);
+  revalidatePath("/");
+  revalidatePath("/montures");
+  revalidatePath("/admin/montures");
+}
+
+export async function toggleFrameActiveAction(fd: FormData) {
+  await requireAdmin();
+  const id = str(fd, "id");
+  const active = str(fd, "active") === "1";
+  if (id) await getStore().updateFrame(id, { active });
+  revalidatePath("/");
+  revalidatePath("/montures");
+  revalidatePath("/admin/montures");
 }

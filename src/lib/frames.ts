@@ -1,9 +1,12 @@
+import type { FrameImageSpec } from "./tryon-math";
+
 /**
- * Catalogue des montures. Les prix sont indicatifs (à ajuster) et les visuels
- * sont générés dans public/frames/ par `npm run frames`.
+ * Montures de démonstration, affichées tant que le catalogue en base est vide.
+ * Les montures réelles se gèrent dans l'espace équipe (/admin/montures) : photo du
+ * produit + calibrage des deux centres de verres pour l'essayage virtuel.
  *
- * Repère commun à tous les visuels (viewBox 1000×400) : centres des verres en
- * (290,200) et (710,200). L'essayage virtuel aligne ces deux points sur les pupilles.
+ * Les visuels de démonstration sont générés dans public/frames/ par `npm run frames`
+ * (viewBox 1000×400, centres des verres en (290,200) et (710,200)).
  */
 
 export type FrameShape =
@@ -31,7 +34,14 @@ export type FrameColor =
   | "rose-dore"
   | "gris";
 
+export interface FrameImage extends FrameImageSpec {
+  url: string;
+}
+
 export interface Frame {
+  id: string;
+  /** "builtin" : monture de démonstration ; "db" : monture gérée dans l'espace équipe. */
+  source: "builtin" | "db";
   slug: string;
   name: string;
   collection: string;
@@ -45,6 +55,29 @@ export interface Frame {
   size: [number, number, number];
   description: string;
   tags?: string[];
+  image: FrameImage;
+  /** Vue 3D disponible (montures construites à partir d'une forme, pas d'une photo). */
+  has3d: boolean;
+}
+
+/** Données d'une monture de démonstration (le reste est dérivé). */
+type BuiltinFrameInput = Omit<Frame, "id" | "source" | "image" | "has3d">;
+
+export const BUILTIN_IMAGE_SPEC: FrameImageSpec = {
+  width: 1000,
+  height: 400,
+  anchorL: { x: 290, y: 200 },
+  anchorR: { x: 710, y: 200 },
+};
+
+function builtin(f: BuiltinFrameInput): Frame {
+  return {
+    ...f,
+    id: `builtin:${f.slug}`,
+    source: "builtin",
+    image: { url: `/frames/${f.slug}.svg`, ...BUILTIN_IMAGE_SPEC },
+    has3d: true,
+  };
 }
 
 export const SHAPE_LABELS: Record<FrameShape, string> = {
@@ -99,7 +132,7 @@ export const COLOR_SWATCH: Record<FrameColor, string> = {
   gris: "#5b6068",
 };
 
-export const FRAMES: Frame[] = [
+const BUILTIN_INPUT: BuiltinFrameInput[] = [
   {
     slug: "kadiogo-noir",
     name: "Kadiogo",
@@ -327,12 +360,10 @@ export const FRAMES: Frame[] = [
   },
 ];
 
-export function getFrame(slug: string): Frame | undefined {
-  return FRAMES.find((f) => f.slug === slug);
-}
+export const BUILTIN_FRAMES: Frame[] = BUILTIN_INPUT.map(builtin);
 
-export function frameImageUrl(frame: Pick<Frame, "slug">): string {
-  return `/frames/${frame.slug}.svg`;
+export function frameImageUrl(frame: Pick<Frame, "image">): string {
+  return frame.image.url;
 }
 
 export function formatFcfa(amount: number): string {

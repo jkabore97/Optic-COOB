@@ -1,7 +1,12 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { newId } from "../ids";
+import { rowToFrame } from "./frame-rows";
+import { SQLITE_SCHEMA, splitStatements } from "./schema";
 import type {
   Appointment,
+  CatalogFrameInput,
+  CatalogFrameRecord,
+  FrameImageBlob,
   NewAppointment,
   NewOrder,
   Order,
@@ -11,9 +16,11 @@ import type {
 } from "./types";
 
 type Row = Record<string, unknown>;
+type ImageInput = { mime: string; bytes: Uint8Array } | null | undefined;
 
 const str = (v: unknown, fallback = "") => (v == null ? fallback : String(v));
 const nullableStr = (v: unknown): string | null => (v == null ? null : String(v));
+const toArrayBuffer = (b: Uint8Array): ArrayBuffer => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
 
 function rowToAppointment(r: Row): Appointment {
   return {
@@ -69,11 +76,26 @@ function rowToSms(r: Row): SmsLog {
   };
 }
 
-/** Stockage Cloudflare D1 (SQLite). Schéma : src/lib/db/schema.sqlite.sql */
+/** Stockage Cloudflare D1 (SQLite). Le schéma est créé automatiquement au premier accès. */
 export class D1Store implements Store {
+  private static schemaReady = new WeakMap<D1Database, Promise<void>>();
+
   constructor(private readonly db: D1Database) {}
 
+  ready(): Promise<void> {
+    let p = D1Store.schemaReady.get(this.db);
+    if (!p) {
+      p = this.db.batch(splitStatements(SQLITE_SCHEMA).map((s) => this.db.prepare(s))).then(() => undefined);
+      D1Store.schemaReady.set(this.db, p);
+      p.catch(() => D1Store.schemaReady.delete(this.db));
+    }
+    return p;
+  }
+
+  // ---- Rendez-vous ----
+
   async createAppointment(input: NewAppointment): Promise<Appointment> {
+    await this.ready();
     const id = newId();
     const now = new Date().toISOString();
     await this.db
@@ -87,11 +109,13 @@ export class D1Store implements Store {
   }
 
   async getAppointment(id: string): Promise<Appointment | null> {
+    await this.ready();
     const row = await this.db.prepare(`select * from appointments where id = ?`).bind(id).first<Row>();
     return row ? rowToAppointment(row) : null;
   }
 
   async listAppointments(opts: { from?: string; to?: string }): Promise<Appointment[]> {
+    await this.ready();
     const { results } = await this.db
       .prepare(
         `select * from appointments
@@ -104,6 +128,7 @@ export class D1Store implements Store {
   }
 
   async bookedTimes(date: string, agency: string): Promise<string[]> {
+    await this.ready();
     const { results } = await this.db
       .prepare(`select time from appointments where date = ? and agency = ? and status <> 'cancelled'`)
       .bind(date, agency)
@@ -115,6 +140,7 @@ export class D1Store implements Store {
     id: string,
     patch: Partial<Pick<Appointment, "status" | "confirmationSmsAt" | "reminderSmsAt">>,
   ): Promise<Appointment | null> {
+    await this.ready();
     await this.db
       .prepare(
         `update appointments set
@@ -128,7 +154,10 @@ export class D1Store implements Store {
     return this.getAppointment(id);
   }
 
+  // ---- Commandes ----
+
   async createOrder(input: NewOrder): Promise<Order> {
+    await this.ready();
     const id = newId();
     const now = new Date().toISOString();
     await this.db
@@ -142,11 +171,13 @@ export class D1Store implements Store {
   }
 
   async getOrder(id: string): Promise<Order | null> {
+    await this.ready();
     const row = await this.db.prepare(`select * from orders where id = ?`).bind(id).first<Row>();
     return row ? rowToOrder(row) : null;
   }
 
   async findOrder(code: string, phone: string): Promise<Order | null> {
+    await this.ready();
     const row = await this.db
       .prepare(`select * from orders where code = ? and phone = ?`)
       .bind(code.trim().toUpperCase(), phone)
@@ -155,6 +186,7 @@ export class D1Store implements Store {
   }
 
   async listOrders(opts: { status?: OrderStatus | "active" }): Promise<Order[]> {
+    await this.ready();
     const stmt =
       opts.status === "active"
         ? this.db.prepare(`select * from orders where status <> 'collected' order by created_at desc`)
@@ -169,6 +201,7 @@ export class D1Store implements Store {
     id: string,
     patch: Partial<Pick<Order, "status" | "readyAt" | "collectedAt" | "readySmsAt" | "notes">>,
   ): Promise<Order | null> {
+    await this.ready();
     await this.db
       .prepare(
         `update orders set
@@ -185,7 +218,10 @@ export class D1Store implements Store {
     return this.getOrder(id);
   }
 
+  // ---- SMS ----
+
   async logSms(entry: Omit<SmsLog, "id" | "createdAt">): Promise<SmsLog> {
+    await this.ready();
     const id = newId();
     const now = new Date().toISOString();
     await this.db
@@ -199,7 +235,90 @@ export class D1Store implements Store {
   }
 
   async listSms(limit = 50): Promise<SmsLog[]> {
+    await this.ready();
     const { results } = await this.db.prepare(`select * from sms_log order by created_at desc limit ?`).bind(limit).all<Row>();
     return results.map(rowToSms);
+  }
+
+  // ---- Catalogue ----
+
+  async listFrames(opts: { includeInactive?: boolean } = {}): Promise<CatalogFrameRecord[]> {
+    await this.ready();
+    const { results } = await this.db
+      .prepare(`select * from frames where (? = 1 or active = 1) order by sort_order, created_at`)
+      .bind(opts.includeInactive ? 1 : 0)
+      .all<Row>();
+    return results.map(rowToFrame);
+  }
+
+  async getFrame(id: string): Promise<CatalogFrameRecord | null> {
+    await this.ready();
+    const row = await this.db.prepare(`select * from frames where id = ?`).bind(id).first<Row>();
+    return row ? rowToFrame(row) : null;
+  }
+
+  async getFrameBySlug(slug: string): Promise<CatalogFrameRecord | null> {
+    await this.ready();
+    const row = await this.db.prepare(`select * from frames where slug = ?`).bind(slug).first<Row>();
+    return row ? rowToFrame(row) : null;
+  }
+
+  async createFrame(input: CatalogFrameInput, image: ImageInput): Promise<CatalogFrameRecord> {
+    await this.ready();
+    const id = newId();
+    const now = new Date().toISOString();
+    await this.db
+      .prepare(
+        `insert into frames (id, slug, name, collection, shape, material, color, gender, price_fcfa,
+           size_lens, size_bridge, size_temple, description, tags, image, image_mime, image_width, image_height,
+           anchor_lx, anchor_ly, anchor_rx, anchor_ry, active, sort_order, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        id, input.slug, input.name, input.collection, input.shape, input.material, input.color, input.gender,
+        input.priceFcfa, input.sizeLens, input.sizeBridge, input.sizeTemple, input.description, input.tags.join(","),
+        image ? toArrayBuffer(image.bytes) : null, image?.mime ?? null, input.imageWidth, input.imageHeight,
+        input.anchorLx, input.anchorLy, input.anchorRx, input.anchorRy, input.active ? 1 : 0, input.sortOrder, now, now,
+      )
+      .run();
+    return (await this.getFrame(id))!;
+  }
+
+  async updateFrame(id: string, patch: Partial<CatalogFrameInput>, image?: ImageInput): Promise<CatalogFrameRecord | null> {
+    await this.ready();
+    const current = await this.getFrame(id);
+    if (!current) return null;
+    const next = { ...current, ...patch };
+    await this.db
+      .prepare(
+        `update frames set slug = ?, name = ?, collection = ?, shape = ?, material = ?, color = ?, gender = ?,
+           price_fcfa = ?, size_lens = ?, size_bridge = ?, size_temple = ?, description = ?, tags = ?,
+           image = coalesce(?, image), image_mime = coalesce(?, image_mime), image_width = ?, image_height = ?,
+           anchor_lx = ?, anchor_ly = ?, anchor_rx = ?, anchor_ry = ?, active = ?, sort_order = ?, updated_at = ?
+         where id = ?`,
+      )
+      .bind(
+        next.slug, next.name, next.collection, next.shape, next.material, next.color, next.gender, next.priceFcfa,
+        next.sizeLens, next.sizeBridge, next.sizeTemple, next.description, next.tags.join(","),
+        image ? toArrayBuffer(image.bytes) : null, image?.mime ?? null, next.imageWidth, next.imageHeight,
+        next.anchorLx, next.anchorLy, next.anchorRx, next.anchorRy, next.active ? 1 : 0, next.sortOrder,
+        new Date().toISOString(), id,
+      )
+      .run();
+    return this.getFrame(id);
+  }
+
+  async deleteFrame(id: string): Promise<boolean> {
+    await this.ready();
+    const res = await this.db.prepare(`delete from frames where id = ?`).bind(id).run();
+    return (res.meta.changes ?? 0) > 0;
+  }
+
+  async getFrameImage(id: string): Promise<FrameImageBlob | null> {
+    await this.ready();
+    const row = await this.db.prepare(`select image, image_mime, updated_at from frames where id = ?`).bind(id).first<Row>();
+    if (!row || !row.image || !row.image_mime) return null;
+    const raw = row.image as ArrayBuffer | Uint8Array;
+    return { mime: String(row.image_mime), bytes: raw instanceof Uint8Array ? raw : new Uint8Array(raw), updatedAt: String(row.updated_at) };
   }
 }

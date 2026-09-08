@@ -14,14 +14,14 @@ declare global {
 /**
  * Retourne le stockage configuré, dans cet ordre :
  * 1. Cloudflare D1 si un binding `DB` est présent (déploiement Cloudflare Workers) ;
- * 2. PostgreSQL si DATABASE_URL est défini (Supabase, Neon…) ;
+ * 2. PostgreSQL si DATABASE_URL (ou POSTGRES_URL, injecté par Vercel Storage) est défini ;
  * 3. sinon un fichier JSON local (DATA_FILE, défaut ./data/store.json).
  */
 export function getStore(): Store {
   if (globalThis.__coobStore) return globalThis.__coobStore;
 
   const d1 = getD1Binding();
-  const url = process.env.DATABASE_URL;
+  const url = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL;
   const store = d1
     ? new D1Store(d1)
     : url

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { OrderRow } from "@/components/admin/OrderRow";
 import { ORDER_STATUS_FLOW, ORDER_STATUS_LABELS, getStore, type OrderStatus } from "@/lib/db";
 import { NewOrderForm } from "./NewOrderForm";
+import { getCatalog } from "@/lib/catalog";
+import { COLOR_LABELS } from "@/lib/frames";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +18,11 @@ export default async function OrdersPage({ searchParams }: PageProps<"/admin/com
   const sp = await searchParams;
   const filter = (first(sp.statut) ?? "active") as OrderStatus | "active" | "all";
   const ok = first(sp.ok);
-  const orders = await getStore().listOrders({ status: filter === "all" ? undefined : filter });
+  const [orders, catalog] = await Promise.all([
+    getStore().listOrders({ status: filter === "all" ? undefined : filter }),
+    getCatalog(),
+  ]);
+  const frameNames = catalog.map((f) => `${f.name} ${COLOR_LABELS[f.color] ?? ""}`.trim());
 
   return (
     <div className="grid gap-8 lg:grid-cols-5">
@@ -26,7 +32,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/admin/com
             Commande <span className="font-mono font-semibold">{ok}</span> enregistrée.
           </p>
         )}
-        <NewOrderForm />
+        <NewOrderForm frameNames={frameNames} />
       </div>
       <div className="lg:col-span-3">
         <div className="flex flex-wrap gap-1">

@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { FRAMES } from "../src/lib/frames";
+import { BUILTIN_FRAMES as FRAMES } from "../src/lib/frames";
 
 describe("catalogue", () => {
   it("a des slugs uniques et un visuel pour chaque monture", () => {
