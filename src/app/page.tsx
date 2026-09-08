@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { FrameCard } from "@/components/FrameCard";
+import { HeroGlasses } from "@/components/HeroGlasses";
 import { AGENCIES, BRANDS, BUSINESS, OPENING_HOURS, WEEKDAY_LABELS, type Weekday } from "@/lib/config";
 import { FRAMES } from "@/lib/frames";
 
@@ -79,21 +80,7 @@ export default function HomePage() {
               </span>
             </div>
           </div>
-          <div className="relative">
-            <div className="absolute -right-6 -top-6 h-40 w-40 rounded-full bg-brand-500/20 blur-2xl" aria-hidden="true" />
-            <Image
-              src="/images/hero-store.jpg"
-              alt="Une cliente essaie une monture avec un opticien COOB"
-              width={1440}
-              height={969}
-              priority
-              sizes="(min-width: 768px) 50vw, 100vw"
-              className="relative w-full rounded-3xl object-cover shadow-soft"
-            />
-            <p className="absolute bottom-4 right-4 rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-ink shadow-soft backdrop-blur">
-              {BUSINESS.tagline}
-            </p>
-          </div>
+          <HeroGlasses />
         </div>
       </section>
 
@@ -222,7 +209,7 @@ export default function HomePage() {
           </div>
           <div className="lg:col-span-2">
             <div className="card overflow-hidden">
-              <Image src="/images/store-optician.jpg" alt="Un opticien COOB en agence" width={1440} height={2015} sizes="(min-width: 1024px) 40vw, 100vw" className="aspect-[4/3] w-full object-cover object-top" />
+              <Image src="/images/hero-store.jpg" alt="Une cliente essaie une monture avec un opticien COOB" width={1440} height={969} sizes="(min-width: 1024px) 40vw, 100vw" className="aspect-[4/3] w-full object-cover" />
               <div className="p-5">
                 <h3 className="font-semibold">Horaires d&apos;ouverture</h3>
                 <ul className="mt-3 space-y-2 text-sm">

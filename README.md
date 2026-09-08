@@ -12,11 +12,13 @@ Fonctionnalités :
 - **Prise de rendez-vous** pour un examen de vue, par agence, avec créneaux en temps réel,
   SMS de confirmation immédiat et SMS de rappel la veille.
 - **Suivi de commande** côté client (référence + téléphone).
+- **Vue 3D animée** des montures (three.js, modèles construits à partir du catalogue) :
+  rotation automatique sur la page d'accueil, manipulation au doigt sur chaque fiche.
 - **Espace équipe** (`/admin`) : rendez-vous du jour, création et suivi des commandes, et
   **SMS automatique au client quand ses lunettes sont prêtes**. Journal des SMS.
 
-Stack : Next.js 16 (App Router), TypeScript, Tailwind CSS 4, Zod, `postgres` (pure JS),
-`@mediapipe/tasks-vision`, Vitest.
+Stack : Next.js 16 (App Router), TypeScript, Tailwind CSS 4, Zod, three.js,
+`@mediapipe/tasks-vision`, Cloudflare D1 / PostgreSQL (`postgres`, pure JS), Vitest.
 
 ## Démarrer
 
@@ -52,7 +54,7 @@ Variables d'environnement (voir `.env.example`) :
 | Variable | Rôle |
 | --- | --- |
 | `ADMIN_PASSWORD` | Active l'espace équipe (obligatoire en production). |
-| `DATABASE_URL` | PostgreSQL (Supabase, Neon…). Appliquer `src/lib/db/schema.sql` une fois. Sinon : fichier JSON local. |
+| `DATABASE_URL` | PostgreSQL (Supabase, Neon…). Appliquer `src/lib/db/schema.sql` une fois. Sur Cloudflare, le binding D1 `DB` est utilisé à la place ; sinon : fichier JSON local. |
 | `SMS_PROVIDER` | `console` (défaut), `twilio` ou `orange`. |
 | `TWILIO_*` / `ORANGE_*` | Identifiants du fournisseur SMS choisi. |
 | `CRON_SECRET` | Protège `/api/cron/reminders` (rappels de RDV la veille, planifié dans `vercel.json`). |
@@ -82,8 +84,48 @@ rendez-vous ou d'une commande, et le bouton « Renvoyer le SMS » permet de rée
 
 ## Déploiement
 
-Le projet est prêt pour Vercel (cron des rappels dans `vercel.json`). Avec Vercel, le système
-de fichiers est éphémère : définir `DATABASE_URL` (Supabase par exemple) et appliquer
+### Cloudflare Workers (configuration actuelle)
+
+Le site tourne sur Cloudflare Workers via l'adaptateur [OpenNext](https://opennext.js.org/cloudflare),
+avec une base **D1** (`optic-coob`) pour les rendez-vous, commandes et le journal SMS, et un
+**Cron Trigger** quotidien pour les SMS de rappel. Tout est décrit dans `wrangler.jsonc`.
+
+Dans le tableau de bord Cloudflare → Workers → `optic-coob` → *Settings* → *Build* :
+
+| Réglage | Valeur |
+| --- | --- |
+| Build command | `npm run build:cf` |
+| Deploy command | `npx wrangler deploy` |
+
+Sans build command, `wrangler deploy` ne trouve rien à déployer (c'est l'erreur
+« Could not detect a directory containing static files »).
+
+Secrets à définir une fois (*Settings* → *Variables and Secrets*, ou `npx wrangler secret put NOM`) :
+`ADMIN_PASSWORD`, `CRON_SECRET`, puis les identifiants SMS (`SMS_PROVIDER=orange` ou `twilio`
+et les variables associées). La variable `NEXT_PUBLIC_SITE_URL` de `wrangler.jsonc` doit
+pointer vers l'URL réelle du site (domaine personnalisé ou `*.workers.dev`).
+
+Le schéma D1 a déjà été appliqué sur la base de production. Pour le rejouer ou l'appliquer
+en local :
+
+```bash
+npx wrangler d1 execute optic-coob --remote --file=src/lib/db/schema.sqlite.sql
+npx wrangler d1 execute optic-coob --local  --file=src/lib/db/schema.sqlite.sql   # dev local
+```
+
+Test en local, identique à la production (worker + D1 locale) :
+
+```bash
+npm run preview:cf
+```
+
+Depuis un poste connecté à Cloudflare (`npx wrangler login`), `npm run deploy:cf` construit et
+déploie en une commande.
+
+### Vercel ou serveur classique
+
+Le projet fonctionne aussi sur Vercel (cron des rappels dans `vercel.json`) : le système de
+fichiers y est éphémère, définir `DATABASE_URL` (Supabase par exemple) et appliquer
 `src/lib/db/schema.sql`. Sur un serveur classique (VPS), le stockage JSON local suffit pour
 démarrer ; `DATA_FILE` permet de choisir l'emplacement du fichier.
 
@@ -94,8 +136,10 @@ src/app/            pages (accueil, montures, essayage, rendez-vous, suivi, admi
 src/components/     en-tête, pied de page, TryOn, BookingForm, OrderTracker, admin
 src/lib/config.ts   agences, horaires, réglages métier
 src/lib/frames.ts   catalogue
-src/lib/db/         stockage (fichier JSON ou PostgreSQL) + schéma SQL
+src/lib/db/         stockage (Cloudflare D1, PostgreSQL ou fichier JSON) + schémas SQL
 src/lib/sms/        fournisseurs SMS et modèles de messages
+src/lib/glasses-scene.ts  scène 3D three.js ; src/lib/lens-outline.ts  contours des verres
+cloudflare/         point d'entrée du Worker (site + cron) ; wrangler.jsonc, open-next.config.ts
 scripts/            génération des visuels de montures, copie des fichiers MediaPipe
 tests/              tests unitaires (Vitest)
 ```

@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Fichiers tiers copiés (MediaPipe WASM)
     "public/**",
+    ".open-next/**",
+    "cloudflare/**",
+    ".wrangler/**",
   ]),
 ]);
 

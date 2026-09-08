@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FrameCard } from "@/components/FrameCard";
+import { FrameViewer } from "@/components/FrameViewer";
 import {
   COLOR_LABELS,
   COLOR_SWATCH,
@@ -11,7 +11,6 @@ import {
   MATERIAL_LABELS,
   SHAPE_LABELS,
   formatFcfa,
-  frameImageUrl,
   getFrame,
 } from "@/lib/frames";
 
@@ -45,16 +44,8 @@ export default async function FramePage({ params }: PageProps<"/montures/[slug]"
       </nav>
 
       <div className="mt-6 grid gap-8 lg:grid-cols-5">
-        <div className="card flex items-center justify-center bg-paper-2 p-8 lg:col-span-3">
-          <Image
-            src={frameImageUrl(frame)}
-            alt={`${frame.name} ${COLOR_LABELS[frame.color]}`}
-            width={1000}
-            height={400}
-            unoptimized
-            priority
-            className="h-auto w-full"
-          />
+        <div className="lg:col-span-3">
+          <FrameViewer frame={frame} />
         </div>
         <div className="lg:col-span-2">
           <p className="eyebrow">{frame.collection}</p>
