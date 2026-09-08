@@ -169,8 +169,10 @@ export function proceduralModel(opts: SceneOptions): ModelSpec {
 export async function loadGlbModel(url: string): Promise<ModelSpec> {
   const gltf = await new GLTFLoader().loadAsync(url);
   const object = gltf.scene;
-  const ipd = normalizeGlassesModel(object);
-  return { object, ipd };
+  const estimated = normalizeGlassesModel(object);
+  // Modèles générés par l'espace équipe : écart des verres connu précisément
+  const declared = Number(object.userData?.ipd ?? object.children[0]?.userData?.ipd);
+  return { object, ipd: Number.isFinite(declared) && declared > 0 ? declared : estimated };
 }
 
 /** Luminance moyenne (0–1) d'une image vidéo, pour caler l'exposition du rendu. */

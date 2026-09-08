@@ -67,7 +67,16 @@ cache long.
 
 ### Modèles 3D (essayage réaliste)
 
-Dans la même fiche, section « Modèle 3D » : un fichier **`.glb`** (glTF binaire) de la monture,
+Dans la même fiche, section « Modèle 3D », deux possibilités :
+
+**Générer depuis la photo** (bouton « Générer le modèle 3D depuis la photo ») : la photo détourée
+(fond et verres transparents) est convertie en modèle 3D dans le navigateur, en moins d'une
+seconde : contour de la monture extrait (`src/lib/contour.ts`), extrudé avec l'épaisseur et un galbe,
+texturé avec la photo, verres transparents dans les trous, branches et charnières paramétriques
+(`src/lib/frame-builder.ts`). Renseignez les tailles verre / pont / branche avant de générer pour
+une échelle exacte. Le résultat est un GLB d'environ 0,5 à 1 Mo.
+
+**Importer un fichier** : un **`.glb`** (glTF binaire) de la monture,
 **3 Mo maximum** (limite des requêtes Vercel). Conventions : face avant vers +Z, branches vers
 −Z, monture ouverte, à l'échelle réelle ; l'origine est recalculée automatiquement (milieu des
 verres). Un aperçu tournant vérifie l'orientation avant l'enregistrement. Le modèle est servi par
