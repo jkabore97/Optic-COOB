@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CatalogFilters } from "@/components/CatalogFilters";
 import { FrameCard } from "@/components/FrameCard";
+import { Reveal } from "@/components/Reveal";
 import { getCatalog } from "@/lib/catalog";
 
 export const metadata: Metadata = {
@@ -47,11 +48,11 @@ export default async function CatalogPage({ searchParams }: PageProps<"/montures
           Aucune monture ne correspond à ces critères. Essayez d&apos;élargir votre recherche.
         </p>
       ) : (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Reveal stagger={70} className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {frames.map((f) => (
             <FrameCard key={f.slug} frame={f} />
           ))}
-        </div>
+        </Reveal>
       )}
     </div>
   );

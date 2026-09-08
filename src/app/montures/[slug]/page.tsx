@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FrameCard } from "@/components/FrameCard";
 import { FrameViewer } from "@/components/FrameViewer";
+import { Reveal } from "@/components/Reveal";
 import { getCatalog, getCatalogFrame } from "@/lib/catalog";
 import {
   COLOR_LABELS,
@@ -42,10 +43,10 @@ export default async function FramePage({ params }: PageProps<"/montures/[slug]"
       </nav>
 
       <div className="mt-6 grid gap-8 lg:grid-cols-5">
-        <div className="lg:col-span-3">
+        <div className="rise-in lg:col-span-3">
           <FrameViewer frame={frame} />
         </div>
-        <div className="lg:col-span-2">
+        <div className="rise-in rise-in-2 lg:col-span-2">
           <p className="eyebrow">{frame.collection}</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight">
             {frame.name} <span className="font-normal text-ink-2">{COLOR_LABELS[frame.color]}</span>
@@ -96,12 +97,12 @@ export default async function FramePage({ params }: PageProps<"/montures/[slug]"
 
       {similar.length > 0 && (
         <section className="mt-16">
-          <h2 className="text-2xl font-bold tracking-tight">Dans le même esprit</h2>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Reveal><h2 className="text-2xl font-bold tracking-tight">Dans le même esprit</h2></Reveal>
+          <Reveal stagger={90} className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {similar.map((f) => (
               <FrameCard key={f.slug} frame={f} />
             ))}
-          </div>
+          </Reveal>
         </section>
       )}
     </div>
