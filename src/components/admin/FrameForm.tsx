@@ -41,6 +41,48 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
   const [modelError, setModelError] = useState("");
   const [removeModel, setRemoveModel] = useState(false);
   const hasExistingModel = Boolean(initial?.modelUpdatedAt);
+  const [building, setBuilding] = useState(false);
+  const [buildInfo, setBuildInfo] = useState("");
+
+  /** Génère un modèle 3D à partir de la photo détourée (voir src/lib/frame-builder.ts). */
+  const generateModel = async () => {
+    if (!image || !anchorL || !anchorR) return;
+    setBuilding(true);
+    setModelError("");
+    setBuildInfo("");
+    try {
+      const form = formRef.current;
+      const num = (name: string, fallback: number) => {
+        const v = Number(form?.querySelector<HTMLInputElement>(`[name=${name}]`)?.value);
+        return Number.isFinite(v) && v > 0 ? v : fallback;
+      };
+      const material = form?.querySelector<HTMLSelectElement>("[name=material]")?.value ?? "acetate";
+      const { buildFrameModel, exportGlb, imageToCanvas } = await import("@/lib/frame-builder");
+      const canvas = await imageToCanvas(image.src);
+      const lens = num("sizeLens", 52), bridge = num("sizeBridge", 18);
+      const widthMm = lens * 2 + bridge + 12; // + embouts
+      const built = buildFrameModel(canvas, {
+        widthMm,
+        thicknessMm: material === "metal" || material === "titane" ? 1.8 : 4,
+        templeMm: num("sizeTemple", 140),
+        anchors: { anchorL, anchorR },
+      });
+      const data = await exportGlb(built.group);
+      const bytes = Math.round((data.length * 3) / 4);
+      if (bytes > 3 * 1024 * 1024) {
+        setModelError("Le modèle généré dépasse 3 Mo. Réduisez la taille de la photo et réessayez.");
+        return;
+      }
+      setModelData(data);
+      setModelName(`généré depuis la photo (${Math.round(bytes / 1024)} Ko)`);
+      setRemoveModel(false);
+      setBuildInfo(`Modèle généré : largeur ${Math.round(built.widthMm)} mm, écart des verres ${Math.round(built.ipdMm)} mm.`);
+    } catch (err) {
+      setModelError(err instanceof Error ? err.message : "La génération du modèle a échoué.");
+    } finally {
+      setBuilding(false);
+    }
+  };
 
   const onModelFile = (file: File | undefined) => {
     setModelError("");
@@ -63,6 +105,7 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<File | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const processFile = async (file: File | null, remove = removeBg, thr = threshold, lenses = clearLenses) => {
     if (!file) return;
@@ -119,7 +162,7 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
   const pct = (p: Pt) => ({ left: `${(p.x / (image?.width || 1)) * 100}%`, top: `${(p.y / (image?.height || 1)) * 100}%` });
 
   return (
-    <form action={action} className="grid gap-6 lg:grid-cols-5">
+    <form ref={formRef} action={action} className="grid gap-6 lg:grid-cols-5">
       <input type="hidden" name="id" value={initial?.id ?? ""} />
       <input type="hidden" name="imageData" value={image?.data ?? ""} />
       <input type="hidden" name="imageWidth" value={image?.width ?? 0} />
@@ -239,12 +282,16 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
       <section className="card p-5 lg:col-span-3 lg:order-3">
         <h2 className="text-lg font-bold">3. Modèle 3D (facultatif, mais c&apos;est lui qui fait l&apos;essayage réaliste)</h2>
         <p className="mt-1 text-sm text-ink-2">
-          Fichier <code>.glb</code> de la monture, 3 Mo maximum : face avant vers l&apos;avant, branches vers l&apos;arrière, à l&apos;échelle réelle.
-          Sans modèle, l&apos;essayage utilise la photo. Avec, la monture suit la tête en 3D et les branches passent derrière le visage.
+          Deux façons : générer le modèle automatiquement à partir de la photo ci-dessus, ou importer un fichier <code>.glb</code>
+          (3 Mo maximum, face avant vers l&apos;avant, branches vers l&apos;arrière, à l&apos;échelle réelle). Sans modèle, l&apos;essayage
+          utilise la photo à plat ; avec, la monture suit la tête en 3D et les branches passent derrière le visage.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button type="button" className="btn-lime btn-sm" onClick={() => void generateModel()} disabled={!image || !anchorL || !anchorR || building}>
+            {building ? "Génération…" : "Générer le modèle 3D depuis la photo"}
+          </button>
           <label className="btn-outline btn-sm cursor-pointer">
-            {modelData || hasExistingModel ? "Remplacer le modèle 3D" : "Choisir un fichier .glb"}
+            {modelData || hasExistingModel ? "Remplacer par un fichier .glb" : "Ou importer un fichier .glb"}
             <input type="file" accept=".glb,model/gltf-binary" className="sr-only" onChange={(e) => onModelFile(e.target.files?.[0])} />
           </label>
           {modelName && <span className="text-xs text-ink-3">{modelName}</span>}
@@ -256,6 +303,12 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
           )}
         </div>
         {modelError && <p className="mt-2 rounded-xl bg-red-50 px-4 py-2 text-sm text-red-800">{modelError}</p>}
+        {buildInfo && <p className="mt-2 rounded-xl bg-green-50 px-4 py-2 text-sm text-green-800">{buildInfo}</p>}
+        <p className="mt-2 text-xs text-ink-3">
+          « Générer » construit un modèle à partir de la photo détourée (fond et verres transparents) : la monture est extrudée avec
+          son épaisseur et un galbe, texturée avec la photo, verres transparents et branches ajoutés. Renseignez les tailles
+          (verre / pont / branche) avant de générer pour une échelle exacte.
+        </p>
         {(modelData || (hasExistingModel && !removeModel)) && (
           <div className="mt-4 max-w-lg">
             <ModelPreview url={modelData || `/api/frames/${initial!.id}/model?v=${Date.parse(initial!.modelUpdatedAt!) || 0}`} />
