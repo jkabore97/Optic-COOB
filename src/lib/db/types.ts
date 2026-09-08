@@ -135,9 +135,11 @@ export interface CatalogFrameRecord {
   modelUpdatedAt: string | null;
   /** Rotation à appliquer au modèle 3D (degrés X, Y, Z), pour les fichiers mal orientés. */
   modelRotation: [number, number, number];
+  /** Utiliser le modèle 3D pour l'essayage caméra (sinon : photo sans branches). */
+  modelInTryOn: boolean;
 }
 
-export type CatalogFrameInput = Omit<CatalogFrameRecord, "id" | "createdAt" | "updatedAt" | "imageMime" | "modelUpdatedAt" | "modelRotation">;
+export type CatalogFrameInput = Omit<CatalogFrameRecord, "id" | "createdAt" | "updatedAt" | "imageMime" | "modelUpdatedAt" | "modelRotation" | "modelInTryOn">;
 
 export interface FrameImageBlob {
   mime: string;
@@ -169,7 +171,7 @@ export interface FrameModelBlob {
 
 export interface CatalogModelStore {
   setFrameModel(frameId: string, model: { mime: string; bytes: Uint8Array }): Promise<void>;
-  setFrameModelRotation(frameId: string, rotation: [number, number, number]): Promise<void>;
+  setFrameModelSettings(frameId: string, settings: { rotation: [number, number, number]; useInTryOn: boolean }): Promise<void>;
   deleteFrameModel(frameId: string): Promise<void>;
   getFrameModel(frameId: string): Promise<FrameModelBlob | null>;
 }

@@ -256,7 +256,7 @@ export class D1Store implements Store {
   async listFrames(opts: { includeInactive?: boolean } = {}): Promise<CatalogFrameRecord[]> {
     await this.ready();
     const { results } = await this.db
-      .prepare(`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation from frames f left join frame_models m on m.frame_id = f.id where (? = 1 or f.active = 1) order by f.sort_order, f.created_at`)
+      .prepare(`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation, m.use_in_tryon as model_in_tryon from frames f left join frame_models m on m.frame_id = f.id where (? = 1 or f.active = 1) order by f.sort_order, f.created_at`)
       .bind(opts.includeInactive ? 1 : 0)
       .all<Row>();
     return results.map(rowToFrame);
@@ -264,13 +264,13 @@ export class D1Store implements Store {
 
   async getFrame(id: string): Promise<CatalogFrameRecord | null> {
     await this.ready();
-    const row = await this.db.prepare(`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation from frames f left join frame_models m on m.frame_id = f.id where f.id = ?`).bind(id).first<Row>();
+    const row = await this.db.prepare(`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation, m.use_in_tryon as model_in_tryon from frames f left join frame_models m on m.frame_id = f.id where f.id = ?`).bind(id).first<Row>();
     return row ? rowToFrame(row) : null;
   }
 
   async getFrameBySlug(slug: string): Promise<CatalogFrameRecord | null> {
     await this.ready();
-    const row = await this.db.prepare(`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation from frames f left join frame_models m on m.frame_id = f.id where f.slug = ?`).bind(slug).first<Row>();
+    const row = await this.db.prepare(`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation, m.use_in_tryon as model_in_tryon from frames f left join frame_models m on m.frame_id = f.id where f.slug = ?`).bind(slug).first<Row>();
     return row ? rowToFrame(row) : null;
   }
 
@@ -330,9 +330,12 @@ export class D1Store implements Store {
       .run();
   }
 
-  async setFrameModelRotation(frameId: string, rotation: [number, number, number]): Promise<void> {
+  async setFrameModelSettings(frameId: string, settings: { rotation: [number, number, number]; useInTryOn: boolean }): Promise<void> {
     await this.ready();
-    await this.db.prepare(`update frame_models set rotation = ? where frame_id = ?`).bind(rotation.join(","), frameId).run();
+    await this.db
+      .prepare(`update frame_models set rotation = ?, use_in_tryon = ? where frame_id = ?`)
+      .bind(settings.rotation.join(","), settings.useInTryOn ? 1 : 0, frameId)
+      .run();
   }
 
   async deleteFrameModel(frameId: string): Promise<void> {

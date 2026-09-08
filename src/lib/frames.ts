@@ -59,7 +59,7 @@ export interface Frame {
   /** Vue 3D procédurale disponible (montures de démonstration construites à partir d'une forme). */
   has3d: boolean;
   /** Modèle 3D réel (GLB) fourni dans l'espace équipe, avec sa rotation de correction (degrés). */
-  model?: { url: string; rotation: [number, number, number] };
+  model?: { url: string; rotation: [number, number, number]; useInTryOn: boolean };
 }
 
 /** Données d'une monture de démonstration (le reste est dérivé). */

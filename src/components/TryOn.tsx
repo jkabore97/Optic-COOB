@@ -92,8 +92,8 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
   const cleanedRef = useRef(new Map<string, string>());
   const [modelLoading, setModelLoading] = useState(false);
 
-  /** Rendu 3D (modèle GLB ou monture procédurale) plutôt que photo à plat. */
-  const use3d = Boolean(frame.model) || frame.has3d;
+  /** Rendu 3D uniquement si la monture a un modèle ET que l'équipe l'a activé pour l'essayage ; sinon photo sans branches. */
+  const use3d = Boolean(frame.model?.useInTryOn);
   const use3dRef = useRef(use3d);
   use3dRef.current = use3d;
 
@@ -641,7 +641,7 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
                 }`}
               >
                 <Image src={frameImageUrl(f)} alt="" width={f.image.width} height={f.image.height} unoptimized className="max-h-full w-auto max-w-full object-contain" />
-                {(f.model || f.has3d) && <span className="absolute right-1 top-1 rounded-full bg-brand-500 px-1.5 text-[9px] font-bold text-ink">3D</span>}
+                {f.model?.useInTryOn && <span className="absolute right-1 top-1 rounded-full bg-brand-500 px-1.5 text-[9px] font-bold text-ink">3D</span>}
               </button>
             ))}
           </div>

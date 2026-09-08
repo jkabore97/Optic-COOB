@@ -191,7 +191,7 @@ export class FileStore implements Store {
   async listFrames(opts: { includeInactive?: boolean } = {}): Promise<CatalogFrameRecord[]> {
     const data = await this.read();
     return data.frames
-      .map((f) => ({ ...f, modelRotation: f.modelRotation ?? [0, 0, 0] }))
+      .map((f) => ({ ...f, modelRotation: f.modelRotation ?? [0, 0, 0], modelInTryOn: f.modelInTryOn ?? false }))
       .filter((f) => opts.includeInactive || f.active)
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
   }
@@ -211,7 +211,7 @@ export class FileStore implements Store {
     if (image) await this.writeImage(id, image);
     return this.mutate((data) => {
       const now = new Date().toISOString();
-      const frame: CatalogFrameRecord = { ...input, id, imageMime: image?.mime ?? null, createdAt: now, updatedAt: now, modelUpdatedAt: null, modelRotation: [0, 0, 0] };
+      const frame: CatalogFrameRecord = { ...input, id, imageMime: image?.mime ?? null, createdAt: now, updatedAt: now, modelUpdatedAt: null, modelRotation: [0, 0, 0], modelInTryOn: false };
       data.frames.push(frame);
       return frame;
     });
@@ -260,10 +260,13 @@ export class FileStore implements Store {
     });
   }
 
-  async setFrameModelRotation(frameId: string, rotation: [number, number, number]): Promise<void> {
+  async setFrameModelSettings(frameId: string, settings: { rotation: [number, number, number]; useInTryOn: boolean }): Promise<void> {
     await this.mutate((data) => {
       const frame = data.frames.find((f) => f.id === frameId);
-      if (frame) frame.modelRotation = rotation;
+      if (frame) {
+        frame.modelRotation = settings.rotation;
+        frame.modelInTryOn = settings.useInTryOn;
+      }
     });
   }
 
@@ -274,6 +277,7 @@ export class FileStore implements Store {
       if (frame) {
         frame.modelUpdatedAt = null;
         frame.modelRotation = [0, 0, 0];
+        frame.modelInTryOn = false;
       }
     });
   }

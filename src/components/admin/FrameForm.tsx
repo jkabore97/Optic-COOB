@@ -42,6 +42,7 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
   const [removeModel, setRemoveModel] = useState(false);
   const hasExistingModel = Boolean(initial?.modelUpdatedAt);
   const [rotation, setRotation] = useState<[number, number, number]>(initial?.modelRotation ?? [0, 0, 0]);
+  const [useInTryOn, setUseInTryOn] = useState(initial?.modelInTryOn ?? false);
   const rotate = (axis: 0 | 1 | 2, delta: number) =>
     setRotation((r) => {
       const next: [number, number, number] = [...r] as [number, number, number];
@@ -206,6 +207,7 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
       <input type="hidden" name="modelData" value={modelData} />
       <input type="hidden" name="removeModel" value={removeModel ? "1" : ""} />
       <input type="hidden" name="modelRotation" value={rotation.join(",")} />
+      <input type="hidden" name="modelInTryOn" value={useInTryOn ? "1" : ""} />
 
       {/* Photo + calibrage */}
       <section className="card p-5 lg:col-span-3">
@@ -336,8 +338,8 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
         <h2 className="text-lg font-bold">3. Modèle 3D (facultatif, mais c&apos;est lui qui fait l&apos;essayage réaliste)</h2>
         <p className="mt-1 text-sm text-ink-2">
           Deux façons : générer le modèle automatiquement à partir de la photo ci-dessus, ou importer un fichier <code>.glb</code>
-          (3 Mo maximum, face avant vers l&apos;avant, branches vers l&apos;arrière, à l&apos;échelle réelle). Sans modèle, l&apos;essayage
-          utilise la photo à plat ; avec, la monture suit la tête en 3D et les branches passent derrière le visage.
+          (3 Mo maximum, face avant vers l&apos;avant, branches vers l&apos;arrière, à l&apos;échelle réelle). Le modèle sert à la vue 3D de la
+          fiche ; l&apos;essayage caméra utilise la photo sans branches, sauf si vous activez le modèle ci-dessous.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button type="button" className="btn-lime btn-sm" onClick={() => void generateModel()} disabled={!image || !anchorL || !anchorR || building}>
@@ -365,6 +367,13 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
         {(modelData || (hasExistingModel && !removeModel)) && (
           <div className="mt-4 max-w-lg">
             <ModelPreview url={modelData || `/api/frames/${initial!.id}/model?v=${Date.parse(initial!.modelUpdatedAt!) || 0}`} rotation={rotation} />
+            <label className="mt-3 flex items-start gap-2 text-sm text-ink-2">
+              <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-700" checked={useInTryOn} onChange={(e) => setUseInTryOn(e.target.checked)} />
+              <span>
+                Utiliser ce modèle 3D pour l&apos;essayage caméra.
+                <span className="block text-xs text-ink-3">Décoché (par défaut) : l&apos;essayage utilise la photo sans branches, plus fidèle pour la plupart des montures. Cochez seulement si l&apos;aperçu 3D vous convient.</span>
+              </span>
+            </label>
             <p className="mt-2 text-xs text-ink-3">Aperçu : la monture doit apparaître de face, branches vers l&apos;arrière. Sinon, corrigez l&apos;orientation :</p>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
               {(["X", "Y", "Z"] as const).map((label, axis) => (
