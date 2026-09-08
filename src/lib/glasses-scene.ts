@@ -105,6 +105,7 @@ export function buildGlasses(opts: SceneOptions): THREE.Group {
     const hingeY = -(b.minY + rimR + 14);
     const dir = mirror ? 1 : -1;
     const hinge = new THREE.Mesh(new THREE.BoxGeometry(thin ? 14 : 26, thin ? 10 : 22, thin ? 10 : 16), mat);
+    hinge.name = "hinge";
     hinge.position.set(outerX + dir * (thin ? 8 : 12), hingeY, -6);
     group.add(hinge);
 
@@ -117,7 +118,9 @@ export function buildGlasses(opts: SceneOptions): THREE.Group {
       new THREE.Vector3(templeStart.x - dir * 18, hingeY - 110, -570),
     ]);
     const templeGeo = new THREE.TubeGeometry(temple, 64, thin ? 3.5 : 7, 12, false);
-    group.add(new THREE.Mesh(templeGeo, mat));
+    const templeMesh = new THREE.Mesh(templeGeo, mat);
+    templeMesh.name = "temple";
+    group.add(templeMesh);
 
     // Plaquettes de nez (montures métal)
     if (thin) {

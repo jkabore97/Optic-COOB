@@ -116,3 +116,32 @@ export function normalizeGlassesModel(object: THREE.Object3D): number {
   object.position.sub(new THREE.Vector3(center.x, center.y, lensZ));
   return width * 0.5;
 }
+
+const TEMPLE_NAME = /temple|branche|arm|hinge|charni|earpiece|tige/i;
+
+/**
+ * Vrai si un maillage est une branche (ou charnière) : nommé comme tel, ou allongé vers
+ * l'arrière (−Z) par rapport à la largeur totale de la monture.
+ */
+export function isTemplePart(name: string, box: THREE.Box3, modelWidth: number): boolean {
+  if (TEMPLE_NAME.test(name)) return true;
+  const depth = box.max.z - box.min.z;
+  const width = box.max.x - box.min.x;
+  return depth > modelWidth * 0.3 && depth > width * 1.5 && box.min.z < -modelWidth * 0.15;
+}
+
+/** Masque les branches d'un modèle (essayage caméra). Retourne le nombre de pièces masquées. */
+export function hideTemples(object: THREE.Object3D): number {
+  const whole = new THREE.Box3().setFromObject(object);
+  const modelWidth = Math.max(1e-6, whole.max.x - whole.min.x);
+  let hidden = 0;
+  object.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    const box = new THREE.Box3().setFromObject(o);
+    if (isTemplePart(o.name, box, modelWidth)) {
+      o.visible = false;
+      hidden++;
+    }
+  });
+  return hidden;
+}

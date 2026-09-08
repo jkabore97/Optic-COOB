@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { faceWidthFrom, normalizeGlassesModel, placeGlasses, placeOccluder, rotationFromMatrix, unprojectAtDepth, yawOf } from "../src/lib/tryon-3d-math";
+import { faceWidthFrom, hideTemples, isTemplePart, normalizeGlassesModel, placeGlasses, placeOccluder, rotationFromMatrix, unprojectAtDepth, yawOf } from "../src/lib/tryon-3d-math";
 
 const camera = new THREE.PerspectiveCamera(63, 4 / 3, 1, 1000);
 camera.position.set(0, 0, 0);
@@ -65,5 +65,31 @@ describe("tryon-3d-math", () => {
     const b = new THREE.Box3().setFromObject(group);
     expect(b.max.z).toBeCloseTo(140 * 0.02);
     expect((b.min.x + b.max.x) / 2).toBeCloseTo(0);
+  });
+});
+
+describe("branches masquées à l'essayage", () => {
+
+  it("reconnaît une branche par son nom ou sa forme", () => {
+    const templeBox = new THREE.Box3(new THREE.Vector3(66, 8, -140), new THREE.Vector3(70, 13, 0));
+    const frontBox = new THREE.Box3(new THREE.Vector3(-70, -20, -3), new THREE.Vector3(70, 20, 3));
+    expect(isTemplePart("", templeBox, 140)).toBe(true);
+    expect(isTemplePart("branche_gauche", frontBox, 140)).toBe(true);
+    expect(isTemplePart("front", frontBox, 140)).toBe(false);
+  });
+
+  it("masque les branches d'un modèle et garde la face avant", () => {
+    const group = new THREE.Group();
+    const front = new THREE.Mesh(new THREE.BoxGeometry(140, 40, 6));
+    front.name = "front";
+    const temple = new THREE.Mesh(new THREE.BoxGeometry(4, 5, 140));
+    temple.position.set(70, 10, -70);
+    const hinge = new THREE.Mesh(new THREE.BoxGeometry(5, 6, 5));
+    hinge.name = "hinge";
+    group.add(front, temple, hinge);
+    expect(hideTemples(group)).toBe(2);
+    expect(front.visible).toBe(true);
+    expect(temple.visible).toBe(false);
+    expect(hinge.visible).toBe(false);
   });
 });
