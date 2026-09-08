@@ -104,25 +104,37 @@ export function trimTransparent(canvas: HTMLCanvasElement, padding = 8): HTMLCan
   return out;
 }
 
-/**
- * Détecte automatiquement les centres des deux verres : les deux plus grandes zones
- * transparentes fermées (non reliées au bord) d'une photo détourée.
- * Retourne null si l'image n'a pas deux verres transparents identifiables.
- */
+/** Centres des deux verres (voir detectLenses). */
 export function detectLensCenters(canvas: HTMLCanvasElement): { anchorL: { x: number; y: number }; anchorR: { x: number; y: number } } | null {
-  const ctx = canvas.getContext("2d")!;
+  const lenses = detectLenses(canvas);
+  if (!lenses) return null;
+  return { anchorL: { x: lenses[0].cx, y: lenses[0].cy }, anchorR: { x: lenses[1].cx, y: lenses[1].cy } };
+}
+
+export interface LensRegion {
+  cx: number;
+  cy: number;
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+/** Les deux verres (zones transparentes fermées) d'une photo détourée, gauche puis droite. */
+export function detectLenses(canvas: HTMLCanvasElement): [LensRegion, LensRegion] | null {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   const { width: w, height: h } = canvas;
   const d = ctx.getImageData(0, 0, w, h).data;
   const n = w * h;
   const clear = new Uint8Array(n);
   for (let i = 0; i < n; i++) clear[i] = d[i * 4 + 3] < 40 ? 1 : 0;
   const label = new Int32Array(n).fill(-1);
-  const comps: { size: number; sx: number; sy: number; border: boolean }[] = [];
+  const comps: (LensRegion & { size: number; sx: number; sy: number; border: boolean })[] = [];
   const stack: number[] = [];
   for (let start = 0; start < n; start++) {
     if (!clear[start] || label[start] >= 0) continue;
     const id = comps.length;
-    const c = { size: 0, sx: 0, sy: 0, border: false };
+    const c = { size: 0, sx: 0, sy: 0, border: false, cx: 0, cy: 0, minX: w, maxX: 0, minY: h, maxY: 0 };
     comps.push(c);
     label[start] = id;
     stack.push(start);
@@ -132,10 +144,12 @@ export function detectLensCenters(canvas: HTMLCanvasElement): { anchorL: { x: nu
       c.size++;
       c.sx += x;
       c.sy += y;
+      if (x < c.minX) c.minX = x;
+      if (x > c.maxX) c.maxX = x;
+      if (y < c.minY) c.minY = y;
+      if (y > c.maxY) c.maxY = y;
       if (x === 0 || y === 0 || x === w - 1 || y === h - 1) c.border = true;
-      const nb = [i - 1, i + 1, i - w, i + w];
-      if (x === 0) nb[0] = -1;
-      if (x === w - 1) nb[1] = -1;
+      const nb = [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w];
       for (const j of nb) {
         if (j >= 0 && j < n && clear[j] && label[j] < 0) {
           label[j] = id;
@@ -145,10 +159,58 @@ export function detectLensCenters(canvas: HTMLCanvasElement): { anchorL: { x: nu
     }
   }
   const inner = comps.filter((c) => !c.border && c.size > n * 0.01).sort((a, b) => b.size - a.size).slice(0, 2);
-  if (inner.length < 2) return null;
-  const [a, b] = inner.map((c) => ({ x: Math.round(c.sx / c.size), y: Math.round(c.sy / c.size) }));
-  // Les deux verres doivent être côte à côte et de taille comparable
-  if (Math.abs(a.y - b.y) > h * 0.25 || Math.abs(a.x - b.x) < w * 0.2) return null;
-  if (inner[1].size < inner[0].size * 0.4) return null;
-  return a.x < b.x ? { anchorL: a, anchorR: b } : { anchorL: b, anchorR: a };
+  if (inner.length < 2 || inner[1].size < inner[0].size * 0.4) return null;
+  for (const c of inner) {
+    c.cx = Math.round(c.sx / c.size);
+    c.cy = Math.round(c.sy / c.size);
+  }
+  const [a, b] = inner;
+  if (Math.abs(a.cy - b.cy) > h * 0.25 || Math.abs(a.cx - b.cx) < w * 0.2) return null;
+  const [l, r] = a.cx < b.cx ? [a, b] : [b, a];
+  const strip = (c: typeof a): LensRegion => ({ cx: c.cx, cy: c.cy, minX: c.minX, maxX: c.maxX, minY: c.minY, maxY: c.maxY });
+  return [strip(l), strip(r)];
+}
+
+/**
+ * Efface les branches d'une photo de face détourée : tout ce qui dépasse, à gauche et à
+ * droite, du bord extérieur du cercle de chaque verre (mesuré à hauteur du verre) devient
+ * transparent. Les dimensions de l'image sont conservées (les ancres restent valables).
+ * Retourne false si les verres n'ont pas pu être identifiés (image inchangée).
+ */
+export function removeTemples(canvas: HTMLCanvasElement): boolean {
+  const lenses = detectLenses(canvas);
+  if (!lenses) return false;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  const { width: w, height: h } = canvas;
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  const alpha = (x: number, y: number) => d[(y * w + x) * 4 + 3];
+  const [l, r] = lenses;
+
+  // Bord extérieur du cercle gauche : depuis le verre, vers la gauche, jusqu'au premier pixel transparent.
+  // On prend la valeur la plus à l'extérieur sur quelques lignes autour du centre du verre.
+  let cutL = 0;
+  let cutR = w - 1;
+  const rows = 9;
+  for (let k = -rows; k <= rows; k++) {
+    const yl = Math.min(h - 1, Math.max(0, l.cy + k * Math.max(1, Math.round((l.maxY - l.minY) / (rows * 2.5)))));
+    let x = l.minX;
+    while (x > 0 && alpha(x - 1, yl) > 40) x--;
+    cutL = Math.max(cutL, x);
+    const yr = Math.min(h - 1, Math.max(0, r.cy + k * Math.max(1, Math.round((r.maxY - r.minY) / (rows * 2.5)))));
+    let xr = r.maxX;
+    while (xr < w - 1 && alpha(xr + 1, yr) > 40) xr++;
+    cutR = Math.min(cutR, xr);
+  }
+  // Petite marge pour garder l'arrondi du cercle, puis effacement
+  const margin = Math.max(2, Math.round(w * 0.004));
+  cutL = Math.max(0, cutL - margin);
+  cutR = Math.min(w - 1, cutR + margin);
+  if (cutL <= 0 && cutR >= w - 1) return true;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < cutL; x++) d[(y * w + x) * 4 + 3] = 0;
+    for (let x = cutR + 1; x < w; x++) d[(y * w + x) * 4 + 3] = 0;
+  }
+  ctx.putImageData(img, 0, 0);
+  return true;
 }
