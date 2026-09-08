@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" width="1000" height="400" role="img" aria-label="Réo argent">
+  <defs>
+    
+    <linearGradient id="glare" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.02"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.10"/>
+    </linearGradient>
+  </defs>
+  <g>
+    
+    <rect x="155.5" y="153" width="16" height="12" rx="4" fill="#b8bcc4" stroke="#6f747c" stroke-width="2"/>
+    <rect x="828.5" y="153" width="16" height="12" rx="4" fill="#b8bcc4" stroke="#6f747c" stroke-width="2"/>
+    
+    <g transform=" translate(290,200)">
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="rgba(180,200,220,0.10)"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="url(#glare)" opacity="0.9"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="none" stroke="#6f747c" stroke-width="13" stroke-linejoin="round"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="none" stroke="#b8bcc4" stroke-width="9" stroke-linejoin="round"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="none" stroke="#eef0f3" stroke-width="2" stroke-linejoin="round" opacity="0.55"
+            transform="translate(-1.6199999999999999,-1.6199999999999999)"/>
+    </g>
+    
+    <g transform="translate(1000,0) scale(-1,1) translate(290,200)">
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="rgba(180,200,220,0.10)"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="url(#glare)" opacity="0.9"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="none" stroke="#6f747c" stroke-width="13" stroke-linejoin="round"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="none" stroke="#b8bcc4" stroke-width="9" stroke-linejoin="round"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="none" stroke="#eef0f3" stroke-width="2" stroke-linejoin="round" opacity="0.55"
+            transform="translate(-1.6199999999999999,-1.6199999999999999)"/>
+    </g>
+    <path d="M 404 149.4 C 438 119.4 562 119.4 596 149.4"
+         fill="none" stroke="#b8bcc4" stroke-width="9" stroke-linecap="round"/>
+       
+       <ellipse cx="416" cy="226" rx="7" ry="12" fill="rgba(230,235,240,0.55)" stroke="#6f747c" stroke-width="2"/>
+       <ellipse cx="584" cy="226" rx="7" ry="12" fill="rgba(230,235,240,0.55)" stroke="#6f747c" stroke-width="2"/>
+    
+  </g>
+</svg>

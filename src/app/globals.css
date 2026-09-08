@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+@theme {
+  /* Vert COOB (logo : #afbb01) et ses déclinaisons */
+  --color-brand-50: #f7f9e4;
+  --color-brand-100: #eef2c2;
+  --color-brand-200: #dfe78a;
+  --color-brand-300: #cdd94f;
+  --color-brand-400: #bccb1c;
+  --color-brand-500: #afbb01;
+  --color-brand-600: #8e9800;
+  --color-brand-700: #6c7400;
+  --color-brand-800: #4f5500;
+  --color-brand-900: #343800;
+
+  /* Orange des campagnes COOB */
+  --color-accent-100: #fdebd7;
+  --color-accent-300: #f9c08a;
+  --color-accent-400: #f5a45a;
+  --color-accent-500: #f0932b;
+  --color-accent-600: #d47716;
+  --color-accent-700: #a65a0f;
+
+  --color-paper: #fafaf6;
+  --color-paper-2: #f1f2ea;
+  --color-ink: #1b1c17;
+  --color-ink-2: #474941;
+  --color-ink-3: #767970;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --shadow-soft: 0 1px 2px rgba(27, 28, 23, 0.06), 0 8px 24px -12px rgba(27, 28, 23, 0.18);
+}
+
+html {
+  color-scheme: light;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .container-x {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
+  }
+  .btn,
+  .btn-primary,
+  .btn-lime,
+  .btn-accent,
+  .btn-outline,
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition
+      focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply bg-brand-700 text-white hover:bg-brand-800;
+  }
+  .btn-lime {
+    @apply bg-brand-500 text-ink hover:bg-brand-400;
+  }
+  .btn-accent {
+    @apply bg-accent-500 text-ink hover:bg-accent-400;
+  }
+  .btn-outline {
+    @apply border border-brand-700/30 bg-white text-brand-800 hover:border-brand-700 hover:bg-brand-50;
+  }
+  .btn-ghost {
+    @apply text-brand-800 hover:bg-brand-50;
+  }
+  .btn-sm {
+    @apply px-3.5 py-2 text-xs;
+  }
+  .card {
+    @apply rounded-2xl border border-ink/8 bg-white shadow-soft;
+  }
+  .field {
+    @apply w-full rounded-xl border border-ink/15 bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-3
+      focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-ink-2;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.18em] text-brand-700;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+}

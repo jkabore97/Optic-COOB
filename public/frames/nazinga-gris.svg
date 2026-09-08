@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" width="1000" height="400" role="img" aria-label="Nazinga gris">
+  <defs>
+    
+    <linearGradient id="glare" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.02"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.10"/>
+    </linearGradient>
+  </defs>
+  <g>
+    
+    <rect x="169.5" y="119" width="16" height="12" rx="4" fill="#5b6068" stroke="#2f3237" stroke-width="2"/>
+    <rect x="814.5" y="119" width="16" height="12" rx="4" fill="#5b6068" stroke="#2f3237" stroke-width="2"/>
+    
+    <g transform=" translate(290,200)">
+      <path d="M -104 0 A 104 104 0 1 0 104 0 A 104 104 0 1 0 -104 0 Z" fill="rgba(180,190,200,0.10)"/>
+      <path d="M -104 0 A 104 104 0 1 0 104 0 A 104 104 0 1 0 -104 0 Z" fill="url(#glare)" opacity="0.9"/>
+      <path d="M -104 0 A 104 104 0 1 0 104 0 A 104 104 0 1 0 -104 0 Z" fill="none" stroke="#2f3237" stroke-width="13" stroke-linejoin="round"/>
+      <path d="M -104 0 A 104 104 0 1 0 104 0 A 104 104 0 1 0 -104 0 Z" fill="none" stroke="#5b6068" stroke-width="9" stroke-linejoin="round"/>
+      <path d="M -104 0 A 104 104 0 1 0 104 0 A 104 104 0 1 0 -104 0 Z" fill="none" stroke="#8d929a" stroke-width="2" stroke-linejoin="round" opacity="0.55"
+            transform="translate(-1.6199999999999999,-1.6199999999999999)"/>
+    </g>
+    
+    <g transform="translate(1000,0) scale(-1,1) translate(290,200)">
+      <path d="M -104 0 A 104 104 0 1 0 104 0 A 104 104 0 1 0 -104 0 Z" fill="rgba(180,190,200,0.10)"/>
+      <path d="M -104 0 A 104 104 0 1 0 104 0 A 104 104 0 1 0 -104 0 Z" fill="url(#glare)" opacity="0.9"/>
+      <path d="M -104 0 A 104 104 0 1 0 104 0 A 104 104 0 1 0 -104 0 Z" fill="none" stroke="#2f3237" stroke-width="13" stroke-linejoin="round"/>
+      <path d="M -104 0 A 104 104 0 1 0 104 0 A 104 104 0 1 0 -104 0 Z" fill="none" stroke="#5b6068" stroke-width="9" stroke-linejoin="round"/>
+      <path d="M -104 0 A 104 104 0 1 0 104 0 A 104 104 0 1 0 -104 0 Z" fill="none" stroke="#8d929a" stroke-width="2" stroke-linejoin="round" opacity="0.55"
+            transform="translate(-1.6199999999999999,-1.6199999999999999)"/>
+    </g>
+    <path d="M 390 115.4 C 424 85.4 576 85.4 610 115.4"
+         fill="none" stroke="#5b6068" stroke-width="9" stroke-linecap="round"/>
+       
+       <ellipse cx="402" cy="226" rx="7" ry="12" fill="rgba(230,235,240,0.55)" stroke="#2f3237" stroke-width="2"/>
+       <ellipse cx="598" cy="226" rx="7" ry="12" fill="rgba(230,235,240,0.55)" stroke="#2f3237" stroke-width="2"/>
+    
+  </g>
+</svg>
