@@ -15,11 +15,13 @@ export async function loadToCanvas(file: File, maxWidth = 1400): Promise<HTMLCan
 }
 
 /**
- * Rend transparent le fond clair d'une photo produit : les pixels clairs reliés au bord
- * de l'image deviennent transparents (remplissage depuis les bords), avec un léger
- * adoucissement du contour. `threshold` : luminosité minimale (0–255) considérée comme fond.
+ * Rend transparent le fond clair d'une photo produit, avec un léger adoucissement du contour.
+ * - `edges` : seuls les pixels clairs reliés au bord de l'image sont effacés (le fond) ;
+ * - `all` : toutes les zones claires sont effacées, y compris l'intérieur des verres, pour que
+ *   les yeux restent visibles lors de l'essayage virtuel (à éviter pour une monture blanche).
+ * `threshold` : luminosité minimale (0–255) considérée comme fond.
  */
-export function removeLightBackground(canvas: HTMLCanvasElement, threshold = 228): void {
+export function removeLightBackground(canvas: HTMLCanvasElement, threshold = 228, mode: "edges" | "all" = "all"): void {
   const ctx = canvas.getContext("2d")!;
   const { width: w, height: h } = canvas;
   const img = ctx.getImageData(0, 0, w, h);
@@ -33,7 +35,7 @@ export function removeLightBackground(canvas: HTMLCanvasElement, threshold = 228
     if (min >= threshold) bright[i] = 1;
     else if (min >= threshold - 40) soft[i] = 1;
   }
-  const visited = new Uint8Array(n);
+  const visited = mode === "all" ? bright.slice() : new Uint8Array(n);
   const stack: number[] = [];
   const push = (i: number) => {
     if (!visited[i] && bright[i]) {
@@ -49,7 +51,7 @@ export function removeLightBackground(canvas: HTMLCanvasElement, threshold = 228
     push(y * w);
     push(y * w + w - 1);
   }
-  while (stack.length) {
+  while (mode === "edges" && stack.length) {
     const i = stack.pop()!;
     const x = i % w;
     if (x > 0) push(i - 1);

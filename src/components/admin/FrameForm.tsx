@@ -34,18 +34,19 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
   const [anchorR, setAnchorR] = useState<Pt | null>(initial ? { x: initial.anchorRx, y: initial.anchorRy } : null);
   const [picking, setPicking] = useState<"L" | "R" | null>(null);
   const [removeBg, setRemoveBg] = useState(true);
+  const [clearLenses, setClearLenses] = useState(true);
   const [threshold, setThreshold] = useState(228);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<File | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
-  const processFile = async (file: File | null, remove = removeBg, thr = threshold) => {
+  const processFile = async (file: File | null, remove = removeBg, thr = threshold, lenses = clearLenses) => {
     if (!file) return;
     setBusy(true);
     try {
       let canvas = await loadToCanvas(file, 1400);
       if (remove) {
-        removeLightBackground(canvas, thr);
+        removeLightBackground(canvas, thr, lenses ? "all" : "edges");
         canvas = trimTransparent(canvas);
       }
       const data = canvas.toDataURL("image/png");
@@ -99,6 +100,8 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
         <h2 className="text-lg font-bold">1. Photo de la monture</h2>
         <p className="mt-1 text-sm text-ink-2">
           Photo de face, monture ouverte, sur fond blanc ou uni. Idéalement un PNG avec fond transparent.
+          Pour l&apos;essayage, les verres doivent être transparents (les yeux restent visibles) : décochez
+          « Verres transparents aussi » seulement pour une monture blanche ou très claire.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <label className="btn-outline btn-sm cursor-pointer">
@@ -118,6 +121,20 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
             Rendre le fond clair transparent
           </label>
           {removeBg && (
+            <label className="flex items-center gap-2 text-sm text-ink-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-brand-700"
+                checked={clearLenses}
+                onChange={(e) => {
+                  setClearLenses(e.target.checked);
+                  void processFile(fileRef.current, true, threshold, e.target.checked);
+                }}
+              />
+              Verres transparents aussi
+            </label>
+          )}
+          {removeBg && (
             <label className="flex items-center gap-2 text-xs text-ink-3">
               Sensibilité
               <input
@@ -126,8 +143,8 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
                 max={250}
                 value={threshold}
                 onChange={(e) => setThreshold(Number(e.target.value))}
-                onMouseUp={() => void processFile(fileRef.current, true, threshold)}
-                onTouchEnd={() => void processFile(fileRef.current, true, threshold)}
+                onMouseUp={() => void processFile(fileRef.current, true, threshold, clearLenses)}
+                onTouchEnd={() => void processFile(fileRef.current, true, threshold, clearLenses)}
                 className="accent-brand-700"
               />
             </label>
