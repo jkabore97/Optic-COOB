@@ -62,6 +62,13 @@ function paintedBox(el: HTMLVideoElement | HTMLImageElement) {
   return { left: (cw - width) / 2, top: (ch - height) / 2, width, height };
 }
 
+/** Résumé lisible d'une erreur (nom + début du message). */
+function shortError(err: unknown): string {
+  const e = err as { name?: string; message?: string };
+  const msg = (e?.message ?? String(err)).replace(/\s+/g, " ").trim();
+  return `${e?.name ?? "Erreur"} : ${msg.length > 220 ? `${msg.slice(0, 220)}…` : msg}`;
+}
+
 /** Pose des yeux en pixels affichés, à partir des repères normalisés. */
 function poseFromPupils(a: Point, b: Point, w: number, h: number): EyePose {
   return eyePose({ x: a.x * w, y: a.y * h }, { x: b.x * w, y: b.y * h });
@@ -95,30 +102,54 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
   const lastVideoTime = useRef(-1);
   const runningMode = useRef<"VIDEO" | "IMAGE">("VIDEO");
 
+  /** Délégué d'inférence : le GPU pose problème sur certains Android (« ROI contains NaN »). */
+  const delegateRef = useRef<"GPU" | "CPU">(
+    typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent) ? "CPU" : "GPU",
+  );
+  const visionRef = useRef<{ fileset: unknown; vision: typeof import("@mediapipe/tasks-vision") } | null>(null);
+
+  const createLandmarker = useCallback(async (delegate: "GPU" | "CPU") => {
+    if (!visionRef.current) {
+      const vision = await import("@mediapipe/tasks-vision");
+      const fileset = await vision.FilesetResolver.forVisionTasks(WASM_URL);
+      visionRef.current = { fileset, vision };
+    }
+    const { fileset, vision } = visionRef.current;
+    return vision.FaceLandmarker.createFromOptions(fileset as Awaited<ReturnType<typeof vision.FilesetResolver.forVisionTasks>>, {
+      baseOptions: { modelAssetPath: MODEL_URL, delegate },
+      runningMode: runningMode.current,
+      numFaces: 1,
+      outputFaceBlendshapes: false,
+      outputFacialTransformationMatrixes: false,
+    });
+  }, []);
+
   /** Charge le modèle une seule fois. */
   const ensureLandmarker = useCallback(async () => {
     if (landmarkerRef.current) return landmarkerRef.current;
     setStatus("loading");
     setMessage("Chargement du module de détection du visage (quelques Mo la première fois, puis mis en cache)…");
-    const vision = await import("@mediapipe/tasks-vision");
-    const fileset = await vision.FilesetResolver.forVisionTasks(WASM_URL);
-    const create = (delegate: "GPU" | "CPU") =>
-      vision.FaceLandmarker.createFromOptions(fileset, {
-        baseOptions: { modelAssetPath: MODEL_URL, delegate },
-        runningMode: runningMode.current,
-        numFaces: 1,
-        outputFaceBlendshapes: false,
-        outputFacialTransformationMatrixes: false,
-      });
     let lm: FaceLandmarker;
     try {
-      lm = await create("GPU");
-    } catch {
-      lm = await create("CPU");
+      lm = await createLandmarker(delegateRef.current);
+    } catch (err) {
+      if (delegateRef.current === "CPU") throw err;
+      delegateRef.current = "CPU";
+      lm = await createLandmarker("CPU");
     }
     landmarkerRef.current = lm;
     return lm;
-  }, []);
+  }, [createLandmarker]);
+
+  /** Bascule sur le CPU après une erreur d'inférence GPU. Retourne false si déjà sur CPU. */
+  const fallbackToCpu = useCallback(async () => {
+    if (delegateRef.current === "CPU") return false;
+    delegateRef.current = "CPU";
+    landmarkerRef.current?.close();
+    landmarkerRef.current = null;
+    landmarkerRef.current = await createLandmarker("CPU");
+    return true;
+  }, [createLandmarker]);
 
   const stopCamera = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
@@ -158,7 +189,7 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
       console.error(err);
       const name = (err as Error)?.name ?? "";
       setStatus("error");
-      setDetail(`${name}${(err as Error)?.message ? ` : ${(err as Error).message}` : ""}`);
+      setDetail(shortError(err));
       setMessage(
         name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError"
           ? "L'accès à la caméra a été refusé. Autorisez la caméra pour ce site dans votre navigateur, ou utilisez une photo."
@@ -179,7 +210,7 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     } catch (err) {
       console.error(err);
       setStatus("error");
-      setDetail(`${(err as Error)?.name ?? "Erreur"} : ${(err as Error)?.message ?? String(err)}`);
+      setDetail(shortError(err));
       setMessage("Le détecteur de visage n'a pas pu être chargé. Vérifiez votre connexion et réessayez.");
       return;
     }
@@ -190,9 +221,10 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     setMessage("");
 
     /** Boucle de détection vidéo. */
+    let recovering = false;
     const tick = () => {
       const lm = landmarkerRef.current;
-      if (lm && video.readyState >= 2 && video.currentTime !== lastVideoTime.current) {
+      if (!recovering && lm && video.readyState >= 2 && video.videoWidth > 0 && video.currentTime !== lastVideoTime.current) {
         lastVideoTime.current = video.currentTime;
         try {
           const res = lm.detectForVideo(video, performance.now());
@@ -209,16 +241,34 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
           }
         } catch (err) {
           console.error(err);
-          setStatus("error");
-          setDetail(`${(err as Error)?.name ?? "Erreur"} : ${(err as Error)?.message ?? String(err)}`);
-          setMessage("La détection du visage a rencontré une erreur. Réessayez, ou importez une photo.");
-          return;
+          recovering = true;
+          setFaceSeen(false);
+          setMessage("Optimisation pour votre appareil…");
+          fallbackToCpu()
+            .then((switched) => {
+              if (switched) {
+                poseRef.current = null;
+                recovering = false;
+                setMessage("");
+                return;
+              }
+              setStatus("error");
+              setDetail(shortError(err));
+              setMessage("La détection du visage a rencontré une erreur. Réessayez, ou importez une photo.");
+              cancelAnimationFrame(rafRef.current);
+            })
+            .catch((e) => {
+              setStatus("error");
+              setDetail(shortError(e));
+              setMessage("La détection du visage a rencontré une erreur. Réessayez, ou importez une photo.");
+              cancelAnimationFrame(rafRef.current);
+            });
         }
       }
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
-  }, [ensureLandmarker, setRunningMode, stopCamera]);
+  }, [ensureLandmarker, fallbackToCpu, setRunningMode, stopCamera]);
 
   const detectPhoto = useCallback(async () => {
     const img = photoRef.current;
@@ -226,7 +276,14 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     try {
       const lm = await ensureLandmarker();
       await setRunningMode("IMAGE");
-      const res = lm.detect(img);
+      let res: ReturnType<FaceLandmarker["detect"]>;
+      try {
+        res = lm.detect(img);
+      } catch (err) {
+        if (!(await fallbackToCpu())) throw err;
+        await setRunningMode("IMAGE");
+        res = landmarkerRef.current!.detect(img);
+      }
       const face = res.faceLandmarks[0];
       const p = face ? pupils(face) : null;
       if (!p) {
@@ -246,10 +303,10 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     } catch (err) {
       console.error(err);
       setStatus("error");
-      setDetail(`${(err as Error)?.name ?? "Erreur"} : ${(err as Error)?.message ?? String(err)}`);
+      setDetail(shortError(err));
       setMessage("Impossible d'analyser cette photo. Réessayez avec une autre image.");
     }
-  }, [ensureLandmarker, setRunningMode]);
+  }, [ensureLandmarker, fallbackToCpu, setRunningMode]);
 
   const onPhotoChosen = (file: File | undefined) => {
     if (!file) return;
