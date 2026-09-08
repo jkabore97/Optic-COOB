@@ -61,6 +61,29 @@ function paintedBox(el: HTMLVideoElement | HTMLImageElement) {
   return { left: (cw - width) / 2, top: (ch - height) / 2, width, height };
 }
 
+/** Rejette si la promesse n'aboutit pas dans le délai (évite un chargement sans fin). */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label} : délai dépassé (${Math.round(ms / 1000)} s)`)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
+
+/** Vérifie qu'un fichier est bien servi (404 après un déploiement, cache, etc.). */
+async function assertReachable(url: string): Promise<void> {
+  const res = await withTimeout(fetch(url, { method: "HEAD" }), 15000, `Vérification de ${url}`);
+  if (!res.ok) throw new Error(`Fichier introuvable : ${url} (HTTP ${res.status})`);
+}
+
 function shortError(err: unknown): string {
   const e = err as { name?: string; message?: string };
   const msg = (e?.message ?? String(err)).replace(/\s+/g, " ").trim();
@@ -104,6 +127,9 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
   const engineRef = useRef<TryOnEngine | null>(null);
   const faceRef = useRef<FaceObservation | null>(null);
   const samplerRef = useRef<HTMLCanvasElement | null>(null);
+  /** Numéro de tentative, pour ignorer les résultats d'un démarrage annulé. */
+  const attemptRef = useRef(0);
+  const [elapsed, setElapsed] = useState(0);
   const landmarkerRef = useRef<FaceLandmarker | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef(0);
@@ -135,13 +161,14 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
 
   const ensureLandmarker = useCallback(async () => {
     if (landmarkerRef.current) return landmarkerRef.current;
+    await Promise.all([assertReachable(`${WASM_URL}/vision_wasm_internal.js`), assertReachable(MODEL_URL)]);
     let lm: FaceLandmarker;
     try {
-      lm = await createLandmarker(delegateRef.current);
+      lm = await withTimeout(createLandmarker(delegateRef.current), 120000, "Chargement du détecteur");
     } catch (err) {
       if (delegateRef.current === "CPU") throw err;
       delegateRef.current = "CPU";
-      lm = await createLandmarker("CPU");
+      lm = await withTimeout(createLandmarker("CPU"), 120000, "Chargement du détecteur");
     }
     landmarkerRef.current = lm;
     return lm;
@@ -202,17 +229,28 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     if (!video) return;
 
     // 1. La caméra d'abord, dans la foulée du clic.
+    const attempt = ++attemptRef.current;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 960 } },
-        audio: false,
-      });
+      if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error("navigator.mediaDevices indisponible (page non sécurisée ou navigateur intégré)"), { name: "NotSupportedError" });
+      const stream = await withTimeout(
+        navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 960 } },
+          audio: false,
+        }),
+        20000,
+        "Accès à la caméra",
+      );
+      if (attempt !== attemptRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       streamRef.current = stream;
       video.srcObject = stream;
       await video.play().catch(() => undefined);
       setCameraOn(true);
     } catch (err) {
       const name = (err as Error)?.name ?? "";
+      if (attempt !== attemptRef.current) return;
       failWith(
         err,
         name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError"
@@ -221,7 +259,11 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
             ? "Aucune caméra frontale détectée. Vous pouvez importer une photo à la place."
             : name === "NotReadableError"
               ? "La caméra est utilisée par une autre application. Fermez-la puis réessayez."
-              : "Impossible d'accéder à la caméra. Vérifiez qu'elle est autorisée, ou importez une photo.",
+              : name === "NotSupportedError"
+                ? "Ce navigateur ne donne pas accès à la caméra. Ouvrez le site dans Chrome ou Safari, pas dans une application (WhatsApp, Facebook…)."
+                : /délai dépassé/.test((err as Error)?.message ?? "")
+                  ? "La caméra ne répond pas. Fermez les autres applications qui l'utilisent, vérifiez l'autorisation pour ce site, puis réessayez."
+                  : "Impossible d'accéder à la caméra. Vérifiez qu'elle est autorisée, ou importez une photo.",
       );
       return;
     }
@@ -232,9 +274,11 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
       await ensureLandmarker();
       await setRunningMode("VIDEO");
     } catch (err) {
+      if (attempt !== attemptRef.current) return;
       failWith(err, "Le détecteur de visage n'a pas pu être chargé. Vérifiez votre connexion et réessayez.");
       return;
     }
+    if (attempt !== attemptRef.current) return;
 
     poseRef.current = null;
     headRef.current = null;
@@ -347,6 +391,22 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
       landmarkerRef.current = null;
     };
   }, [stopCamera]);
+
+  // Compteur de temps pendant le chargement (pour voir que ça avance)
+  useEffect(() => {
+    if (status !== "loading") return;
+    const since = Date.now();
+    const id = setInterval(() => setElapsed(Math.round((Date.now() - since) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [status]);
+
+  const cancelStart = () => {
+    attemptRef.current++;
+    stopCamera();
+    setStatus("idle");
+    setMessage("");
+    setDetail("");
+  };
 
   // ---- Photo sans branches (montures du catalogue rendues à plat) ----
   useEffect(() => {
@@ -580,7 +640,8 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
             {status === "loading" && cameraOn && (
               <div className="absolute inset-x-3 top-14 flex items-center gap-2 rounded-xl bg-ink/70 px-3 py-2 text-xs text-white backdrop-blur">
                 <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
-                <span>{message}</span>
+                <span className="flex-1">{message}{elapsed >= 3 ? ` (${elapsed} s)` : ""}</span>
+                <button type="button" className="rounded-full bg-white/15 px-2 py-1 hover:bg-white/25" onClick={cancelStart}>Annuler</button>
               </div>
             )}
 
@@ -610,6 +671,12 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
                 <p className="max-w-sm text-sm">
                   {message || (mode === "photo" ? "Choisissez une photo de face pour commencer." : "Activez la caméra pour voir la monture sur votre visage, en direct.")}
                 </p>
+                {status === "loading" && elapsed >= 3 && (
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="text-xs text-white/70">{elapsed} s{elapsed >= 8 && mode === "camera" ? " — si une demande d'autorisation est affichée, acceptez-la" : ""}</p>
+                    <button type="button" className="btn btn-sm bg-white/15 text-white hover:bg-white/25" onClick={cancelStart}>Annuler</button>
+                  </div>
+                )}
                 {status === "error" && detail && <p className="max-w-sm break-all font-mono text-[11px] text-white/60">{detail}</p>}
                 {(status === "idle" || status === "error") && mode === "camera" && (
                   <div className="flex flex-wrap justify-center gap-2">
