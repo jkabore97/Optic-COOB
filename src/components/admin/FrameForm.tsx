@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState, useRef, useState } from "react";
 import { saveFrameAction } from "@/app/admin/actions";
 import { COLOR_LABELS, COLOR_SWATCH, GENDER_LABELS, MATERIAL_LABELS, SHAPE_LABELS } from "@/lib/frames";
-import { loadToCanvas, removeLightBackground, trimTransparent } from "@/lib/image-tools";
+import { detectLensCenters, loadToCanvas, removeLightBackground, trimTransparent } from "@/lib/image-tools";
 import { defaultAnchors, type Pt } from "@/lib/tryon-math";
 import type { CatalogFrameRecord } from "@/lib/db/types";
 
@@ -33,6 +33,7 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
   const [anchorL, setAnchorL] = useState<Pt | null>(initial ? { x: initial.anchorLx, y: initial.anchorLy } : null);
   const [anchorR, setAnchorR] = useState<Pt | null>(initial ? { x: initial.anchorRx, y: initial.anchorRy } : null);
   const [picking, setPicking] = useState<"L" | "R" | null>(null);
+  const [autoCalibrated, setAutoCalibrated] = useState(false);
   const [removeBg, setRemoveBg] = useState(true);
   const [clearLenses, setClearLenses] = useState(true);
   const [threshold, setThreshold] = useState(228);
@@ -52,10 +53,20 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
       const data = canvas.toDataURL("image/png");
       const next = { data, src: data, width: canvas.width, height: canvas.height };
       setImage(next);
-      const def = defaultAnchors(canvas.width, canvas.height);
-      setAnchorL(def.anchorL);
-      setAnchorR(def.anchorR);
-      setPicking("L");
+      // Calibrage automatique : centres des deux zones transparentes (les verres)
+      const auto = detectLensCenters(canvas);
+      if (auto) {
+        setAnchorL(auto.anchorL);
+        setAnchorR(auto.anchorR);
+        setPicking(null);
+        setAutoCalibrated(true);
+      } else {
+        const def = defaultAnchors(canvas.width, canvas.height);
+        setAnchorL(def.anchorL);
+        setAnchorR(def.anchorR);
+        setPicking("L");
+        setAutoCalibrated(false);
+      }
     } finally {
       setBusy(false);
     }
@@ -180,7 +191,9 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
                   ? "Cliquez sur le centre du verre GAUCHE (à gauche sur la photo)"
                   : picking === "R"
                     ? "Cliquez sur le centre du verre DROIT"
-                    : "Calibrage terminé — cliquez sur l'image pour recommencer"}
+                    : autoCalibrated
+                      ? "Centres des verres détectés automatiquement — vérifiez, ou cliquez pour corriger"
+                      : "Calibrage terminé — cliquez sur l'image pour recommencer"}
               </span>
               <button type="button" className="btn-ghost btn-sm" onClick={() => setPicking("L")}>
                 Recalibrer

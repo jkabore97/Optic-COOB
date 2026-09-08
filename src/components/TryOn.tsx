@@ -5,19 +5,25 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FaceLandmarker, NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { COLOR_LABELS, COLOR_SWATCH, formatFcfa, frameImageUrl, type Frame } from "@/lib/frames";
-import { eyePose, placeOverlay, placementToCss, smoothPose, type EyePose } from "@/lib/tryon-math";
+import {
+  eyePose,
+  headPoseFromMatrix,
+  placeOverlay3D,
+  placement3DToCss,
+  projectCorners,
+  smoothHead,
+  smoothPose,
+  type EyePose,
+  type HeadPose,
+} from "@/lib/tryon-math";
 
 /**
  * Essayage virtuel : détection des repères du visage dans le navigateur (MediaPipe
- * Face Landmarker) et superposition du visuel de la monture. Aucune image n'est envoyée
- * à un serveur.
- *
- * Chaque visuel déclare la position des deux centres de verres (voir src/lib/tryon-math.ts) ;
- * ils sont alignés sur les pupilles détectées.
+ * Face Landmarker) et superposition de la photo de la monture, qui suit l'orientation
+ * de la tête. Aucune image n'est envoyée à un serveur.
  */
 
-// Fichiers servis depuis notre domaine (voir scripts/setup-mediapipe.mjs). Surchargeables
-// par NEXT_PUBLIC_MEDIAPIPE_WASM_URL / NEXT_PUBLIC_FACE_MODEL_URL pour utiliser un CDN.
+// Fichiers servis depuis notre domaine (voir scripts/setup-mediapipe.mjs).
 const WASM_URL = process.env.NEXT_PUBLIC_MEDIAPIPE_WASM_URL ?? "/mediapipe/wasm";
 const MODEL_URL = process.env.NEXT_PUBLIC_FACE_MODEL_URL ?? "/mediapipe/face_landmarker.task";
 
@@ -31,78 +37,66 @@ interface Point {
 
 function midpoint(pts: NormalizedLandmark[]): Point {
   const n = pts.length;
-  return {
-    x: pts.reduce((s, p) => s + p.x, 0) / n,
-    y: pts.reduce((s, p) => s + p.y, 0) / n,
-  };
+  return { x: pts.reduce((s, p) => s + p.x, 0) / n, y: pts.reduce((s, p) => s + p.y, 0) / n };
 }
 
-/** Calcule les centres des deux pupilles (coordonnées normalisées 0–1). */
+/** Centres des deux pupilles (coordonnées normalisées 0–1). */
 function pupils(lm: NormalizedLandmark[]): { a: Point; b: Point } | null {
-  if (lm.length >= 478) {
-    // Iris : 468 (œil droit du sujet) et 473 (œil gauche du sujet)
-    return { a: lm[468], b: lm[473] };
-  }
-  if (lm.length >= 468) {
-    return { a: midpoint([lm[33], lm[133]]), b: midpoint([lm[362], lm[263]]) };
-  }
+  if (lm.length >= 478) return { a: lm[468], b: lm[473] };
+  if (lm.length >= 468) return { a: midpoint([lm[33], lm[133]]), b: midpoint([lm[362], lm[263]]) };
   return null;
 }
 
-/** Zone réellement peinte d'une source en object-contain, relative à l'élément. */
+/** Zone réellement peinte d'une source en object-cover, relative à l'élément (peut déborder). */
 function paintedBox(el: HTMLVideoElement | HTMLImageElement) {
   const nw = el instanceof HTMLVideoElement ? el.videoWidth : el.naturalWidth;
   const nh = el instanceof HTMLVideoElement ? el.videoHeight : el.naturalHeight;
   const cw = el.clientWidth;
   const ch = el.clientHeight;
   if (!nw || !nh || !cw || !ch) return null;
-  const scale = Math.min(cw / nw, ch / nh);
+  const scale = Math.max(cw / nw, ch / nh);
   const width = nw * scale;
   const height = nh * scale;
   return { left: (cw - width) / 2, top: (ch - height) / 2, width, height };
 }
 
-/** Résumé lisible d'une erreur (nom + début du message). */
 function shortError(err: unknown): string {
   const e = err as { name?: string; message?: string };
   const msg = (e?.message ?? String(err)).replace(/\s+/g, " ").trim();
   return `${e?.name ?? "Erreur"} : ${msg.length > 220 ? `${msg.slice(0, 220)}…` : msg}`;
 }
 
-/** Pose des yeux en pixels affichés, à partir des repères normalisés. */
-function poseFromPupils(a: Point, b: Point, w: number, h: number): EyePose {
-  return eyePose({ x: a.x * w, y: a.y * h }, { x: b.x * w, y: b.y * h });
+interface Detection {
+  pose: EyePose;
+  head: HeadPose;
 }
 
 export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: string }) {
   const [frame, setFrame] = useState<Frame>(() => frames.find((f) => f.slug === initialSlug) ?? frames[0]);
   const [mode, setMode] = useState<Mode>("camera");
   const [status, setStatus] = useState<Status>("idle");
-  const [message, setMessage] = useState<string>("");
-  /** Détail technique de la dernière erreur (pour le support). */
-  const [detail, setDetail] = useState<string>("");
+  const [message, setMessage] = useState("");
+  const [detail, setDetail] = useState("");
   const [cameraOn, setCameraOn] = useState(false);
-  /** Rapport largeur/hauteur de la zone d'affichage, calé sur la caméra une fois connue. */
-  const [stageAspect, setStageAspect] = useState("4 / 3");
-  const [pose, setPose] = useState<EyePose | null>(null);
+  const [detection, setDetection] = useState<Detection | null>(null);
   const [faceSeen, setFaceSeen] = useState(false);
   const [sizeAdj, setSizeAdj] = useState(1);
   const [yAdj, setYAdj] = useState(0);
+  const [showAdjust, setShowAdjust] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const photoRef = useRef<HTMLImageElement>(null);
   const overlayRef = useRef<HTMLImageElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
   const landmarkerRef = useRef<FaceLandmarker | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const rafRef = useRef<number>(0);
+  const rafRef = useRef(0);
   const poseRef = useRef<EyePose | null>(null);
+  const headRef = useRef<HeadPose | null>(null);
   const lastVideoTime = useRef(-1);
   const runningMode = useRef<"VIDEO" | "IMAGE">("VIDEO");
-
-  /** Délégué d'inférence : le GPU pose problème sur certains Android (« ROI contains NaN »). */
+  /** Le GPU pose problème sur certains Android (« ROI contains NaN ») : CPU d'office. */
   const delegateRef = useRef<"GPU" | "CPU">(
     typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent) ? "CPU" : "GPU",
   );
@@ -120,15 +114,12 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
       runningMode: runningMode.current,
       numFaces: 1,
       outputFaceBlendshapes: false,
-      outputFacialTransformationMatrixes: false,
+      outputFacialTransformationMatrixes: true,
     });
   }, []);
 
-  /** Charge le modèle une seule fois. */
   const ensureLandmarker = useCallback(async () => {
     if (landmarkerRef.current) return landmarkerRef.current;
-    setStatus("loading");
-    setMessage("Chargement du module de détection du visage (quelques Mo la première fois, puis mis en cache)…");
     let lm: FaceLandmarker;
     try {
       lm = await createLandmarker(delegateRef.current);
@@ -151,6 +142,12 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     return true;
   }, [createLandmarker]);
 
+  const setRunningMode = useCallback(async (m: "VIDEO" | "IMAGE") => {
+    if (runningMode.current === m) return;
+    runningMode.current = m;
+    await landmarkerRef.current?.setOptions({ runningMode: m });
+  }, []);
+
   const stopCamera = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -159,10 +156,25 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     setCameraOn(false);
   }, []);
 
-  const setRunningMode = useCallback(async (m: "VIDEO" | "IMAGE") => {
-    if (runningMode.current === m) return;
-    runningMode.current = m;
-    await landmarkerRef.current?.setOptions({ runningMode: m });
+  /** Convertit un résultat MediaPipe en pose (pixels affichés) + orientation. */
+  const toDetection = useCallback(
+    (lm: NormalizedLandmark[], matrix: ArrayLike<number> | undefined, box: { width: number; height: number }, smooth: boolean) => {
+      const p = pupils(lm);
+      if (!p) return null;
+      const pose = eyePose({ x: p.a.x * box.width, y: p.a.y * box.height }, { x: p.b.x * box.width, y: p.b.y * box.height });
+      const head = matrix ? headPoseFromMatrix(matrix) : { yaw: 0, pitch: 0 };
+      poseRef.current = smooth ? smoothPose(poseRef.current, pose) : pose;
+      headRef.current = smooth ? smoothHead(headRef.current, head) : head;
+      return { pose: poseRef.current, head: headRef.current };
+    },
+    [],
+  );
+
+  const failWith = useCallback((err: unknown, text: string) => {
+    console.error(err);
+    setStatus("error");
+    setDetail(shortError(err));
+    setMessage(text);
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -171,14 +183,13 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     setDetail("");
     setStatus("loading");
     setMessage("Accès à la caméra…");
-
-    // 1. La caméra d'abord (dans la foulée du clic, ce que certains navigateurs exigent),
-    //    pour que l'utilisateur se voie immédiatement.
     const video = videoRef.current;
     if (!video) return;
+
+    // 1. La caméra d'abord, dans la foulée du clic.
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 960 } },
         audio: false,
       });
       streamRef.current = stream;
@@ -186,11 +197,9 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
       await video.play().catch(() => undefined);
       setCameraOn(true);
     } catch (err) {
-      console.error(err);
       const name = (err as Error)?.name ?? "";
-      setStatus("error");
-      setDetail(shortError(err));
-      setMessage(
+      failWith(
+        err,
         name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError"
           ? "L'accès à la caméra a été refusé. Autorisez la caméra pour ce site dans votre navigateur, ou utilisez une photo."
           : name === "NotFoundError" || name === "OverconstrainedError"
@@ -203,24 +212,21 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     }
 
     // 2. Puis le détecteur de visage (téléchargé une fois, puis en cache).
-    setMessage("Caméra active. Chargement du détecteur de visage (≈ 15 Mo la première fois)…");
+    setMessage("Chargement du détecteur de visage (≈ 15 Mo la première fois)…");
     try {
       await ensureLandmarker();
       await setRunningMode("VIDEO");
     } catch (err) {
-      console.error(err);
-      setStatus("error");
-      setDetail(shortError(err));
-      setMessage("Le détecteur de visage n'a pas pu être chargé. Vérifiez votre connexion et réessayez.");
+      failWith(err, "Le détecteur de visage n'a pas pu être chargé. Vérifiez votre connexion et réessayez.");
       return;
     }
 
     poseRef.current = null;
+    headRef.current = null;
     lastVideoTime.current = -1;
     setStatus("ready");
     setMessage("");
 
-    /** Boucle de détection vidéo. */
     let recovering = false;
     const tick = () => {
       const lm = landmarkerRef.current;
@@ -229,38 +235,30 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
         try {
           const res = lm.detectForVideo(video, performance.now());
           const face = res.faceLandmarks[0];
-          const p = face ? pupils(face) : null;
-          const box = p ? paintedBox(video) : null;
-          if (p && box) {
-            const next = poseFromPupils(p.a, p.b, box.width, box.height);
-            poseRef.current = smoothPose(poseRef.current, next);
-            setPose(poseRef.current);
+          const box = face ? paintedBox(video) : null;
+          const det = face && box ? toDetection(face, res.facialTransformationMatrixes?.[0]?.data, box, true) : null;
+          if (det) {
+            setDetection(det);
             setFaceSeen(true);
           } else {
             setFaceSeen(false);
           }
         } catch (err) {
-          console.error(err);
           recovering = true;
           setFaceSeen(false);
-          setMessage("Optimisation pour votre appareil…");
           fallbackToCpu()
             .then((switched) => {
               if (switched) {
                 poseRef.current = null;
+                headRef.current = null;
                 recovering = false;
-                setMessage("");
-                return;
+              } else {
+                failWith(err, "La détection du visage a rencontré une erreur. Réessayez, ou importez une photo.");
+                cancelAnimationFrame(rafRef.current);
               }
-              setStatus("error");
-              setDetail(shortError(err));
-              setMessage("La détection du visage a rencontré une erreur. Réessayez, ou importez une photo.");
-              cancelAnimationFrame(rafRef.current);
             })
             .catch((e) => {
-              setStatus("error");
-              setDetail(shortError(e));
-              setMessage("La détection du visage a rencontré une erreur. Réessayez, ou importez une photo.");
+              failWith(e, "La détection du visage a rencontré une erreur. Réessayez, ou importez une photo.");
               cancelAnimationFrame(rafRef.current);
             });
         }
@@ -268,7 +266,7 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
-  }, [ensureLandmarker, fallbackToCpu, setRunningMode, stopCamera]);
+  }, [ensureLandmarker, failWith, fallbackToCpu, setRunningMode, stopCamera, toDetection]);
 
   const detectPhoto = useCallback(async () => {
     const img = photoRef.current;
@@ -285,35 +283,30 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
         res = landmarkerRef.current!.detect(img);
       }
       const face = res.faceLandmarks[0];
-      const p = face ? pupils(face) : null;
-      if (!p) {
+      const box = face ? paintedBox(img) : null;
+      const det = face && box ? toDetection(face, res.facialTransformationMatrixes?.[0]?.data, box, false) : null;
+      setStatus("ready");
+      if (!det) {
         setFaceSeen(false);
-        setPose(null);
-        setStatus("ready");
+        setDetection(null);
         setMessage("Aucun visage détecté sur cette photo. Essayez une photo de face, bien éclairée.");
         return;
       }
-      const box = paintedBox(img)!;
-      const next = poseFromPupils(p.a, p.b, box.width, box.height);
-      poseRef.current = next;
-      setPose(next);
+      setDetection(det);
       setFaceSeen(true);
-      setStatus("ready");
       setMessage("");
     } catch (err) {
-      console.error(err);
-      setStatus("error");
-      setDetail(shortError(err));
-      setMessage("Impossible d'analyser cette photo. Réessayez avec une autre image.");
+      failWith(err, "Impossible d'analyser cette photo. Réessayez avec une autre image.");
     }
-  }, [ensureLandmarker, fallbackToCpu, setRunningMode]);
+  }, [ensureLandmarker, failWith, fallbackToCpu, setRunningMode, toDetection]);
 
   const onPhotoChosen = (file: File | undefined) => {
     if (!file) return;
     stopCamera();
     setSnapshot(null);
-    setPose(null);
+    setDetection(null);
     setFaceSeen(false);
+    setDetail("");
     if (photoUrl) URL.revokeObjectURL(photoUrl);
     setPhotoUrl(URL.createObjectURL(file));
     setMode("photo");
@@ -323,14 +316,13 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
 
   const switchToCamera = () => {
     setMode("camera");
-    setPose(null);
+    setDetection(null);
     setFaceSeen(false);
     setStatus("idle");
     setMessage("");
     setDetail("");
   };
 
-  // Nettoyage à la sortie de la page
   useEffect(() => {
     return () => {
       stopCamera();
@@ -339,9 +331,13 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     };
   }, [stopCamera]);
 
+  const placement = useMemo(
+    () => (detection ? placeOverlay3D(detection.pose, detection.head, frame.image, sizeAdj, yAdj * frame.image.height) : null),
+    [detection, frame.image, sizeAdj, yAdj],
+  );
+
   const overlayStyle = useMemo(() => {
-    if (!pose) return { display: "none" } as const;
-    const placement = placeOverlay(pose, frame.image, sizeAdj, yAdj * frame.image.height);
+    if (!placement) return { display: "none" } as const;
     return {
       display: "block",
       position: "absolute" as const,
@@ -350,110 +346,70 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
       width: frame.image.width,
       height: frame.image.height,
       maxWidth: "none",
-      transformOrigin: "0 0",
-      transform: placementToCss(placement),
+      transformOrigin: `${placement.ox}px ${placement.oy}px`,
+      transform: placement3DToCss(placement),
+      filter: "drop-shadow(0 5px 7px rgba(0,0,0,0.35))",
+      backfaceVisibility: "hidden" as const,
       pointerEvents: "none" as const,
     };
-  }, [pose, frame.image, sizeAdj, yAdj]);
+  }, [placement, frame.image]);
 
   /** Capture une image composite (source + monture) pour la partager. */
   const takeSnapshot = () => {
     const src = mode === "camera" ? videoRef.current : photoRef.current;
     const overlay = overlayRef.current;
-    if (!src || !overlay || !pose) return;
-    const naturalW = src instanceof HTMLVideoElement ? src.videoWidth : src.naturalWidth;
-    const naturalH = src instanceof HTMLVideoElement ? src.videoHeight : src.naturalHeight;
+    if (!src || !overlay || !placement) return;
     const painted = paintedBox(src);
     if (!painted) return;
-    const k = naturalW / painted.width;
+    const naturalW = src instanceof HTMLVideoElement ? src.videoWidth : src.naturalWidth;
+    const naturalH = src instanceof HTMLVideoElement ? src.videoHeight : src.naturalHeight;
+    const k = naturalW / painted.width; // pixels source par pixel affiché
+    // Zone visible (object-cover), en pixels source
+    const visX = Math.max(0, -painted.left) * k;
+    const visY = Math.max(0, -painted.top) * k;
+    const visW = Math.min(naturalW, src.clientWidth * k);
+    const visH = Math.min(naturalH, src.clientHeight * k);
     const canvas = document.createElement("canvas");
-    canvas.width = naturalW;
-    canvas.height = naturalH;
+    canvas.width = Math.round(visW);
+    canvas.height = Math.round(visH);
     const ctx = canvas.getContext("2d")!;
     if (mode === "camera") {
-      ctx.translate(naturalW, 0);
+      ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(src, 0, 0, naturalW, naturalH);
-    const placement = placeOverlay(pose, frame.image, sizeAdj, yAdj * frame.image.height);
+    ctx.drawImage(src, visX, visY, visW, visH, 0, 0, canvas.width, canvas.height);
+    // Monture : projection des coins (approximation affine de la perspective)
+    const [tl, tr, bl] = projectCorners(placement, frame.image).map((p) => ({ x: (p.x - Math.max(0, -painted.left)) * k, y: (p.y - Math.max(0, -painted.top)) * k }));
+    const { width: w, height: h } = frame.image;
     ctx.save();
-    ctx.translate(placement.tx * k, placement.ty * k);
-    ctx.rotate(placement.rotation);
-    ctx.scale(placement.scale * k, placement.scale * k);
-    ctx.drawImage(overlay, -placement.ox, -placement.oy, frame.image.width, frame.image.height);
+    ctx.transform((tr.x - tl.x) / w, (tr.y - tl.y) / w, (bl.x - tl.x) / h, (bl.y - tl.y) / h, tl.x, tl.y);
+    ctx.shadowColor = "rgba(0,0,0,0.35)";
+    ctx.shadowBlur = 8 * k;
+    ctx.shadowOffsetY = 5 * k;
+    ctx.drawImage(overlay, 0, 0, w, h);
     ctx.restore();
     setSnapshot(canvas.toDataURL("image/jpeg", 0.92));
   };
 
   const mirrored = mode === "camera";
+  const showVeil = (status !== "ready" && !(status === "loading" && cameraOn)) || (mode === "photo" && !photoUrl);
 
   return (
     <div className="grid gap-6 lg:grid-cols-5">
-      {/* Scène */}
       <div className="lg:col-span-3">
         <div className="card overflow-hidden">
-          <div className="flex items-center justify-between gap-2 border-b border-ink/8 px-4 py-2.5">
-            <div className="flex gap-1 rounded-full bg-paper-2 p-1" role="tablist" aria-label="Source de l'image">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={mode === "camera"}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold ${mode === "camera" ? "bg-white text-brand-800 shadow-soft" : "text-ink-2"}`}
-                onClick={switchToCamera}
-              >
-                Caméra
-              </button>
-              <label
-                role="tab"
-                aria-selected={mode === "photo"}
-                className={`cursor-pointer rounded-full px-3 py-1.5 text-xs font-semibold ${mode === "photo" ? "bg-white text-brand-800 shadow-soft" : "text-ink-2"}`}
-              >
-                Photo
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="user"
-                  className="sr-only"
-                  onChange={(e) => onPhotoChosen(e.target.files?.[0])}
-                />
-              </label>
-            </div>
-            <span className={`badge ${faceSeen && status === "ready" ? "bg-green-100 text-green-800" : "bg-paper-2 text-ink-3"}`}>
-              {status === "ready" ? (faceSeen ? "Visage détecté" : "Placez-vous face à la caméra") : status === "loading" ? "Chargement…" : "En attente"}
-            </span>
-          </div>
-
-          <div ref={stageRef} className="relative w-full overflow-hidden bg-ink" style={{ aspectRatio: stageAspect }}>
+          {/* Scène */}
+          <div className="relative aspect-[3/4] w-full overflow-hidden bg-ink sm:aspect-[4/3]">
             <div className="absolute inset-0" style={{ transform: mirrored ? "scaleX(-1)" : undefined }}>
               <div className="relative h-full w-full">
                 {mode === "camera" ? (
-                  <video
-                    ref={videoRef}
-                    playsInline
-                    muted
-                    autoPlay
-                    className="h-full w-full object-contain"
-                    onLoadedMetadata={(e) => {
-                      const v = e.currentTarget;
-                      if (v.videoWidth && v.videoHeight) {
-                        const r = Math.min(16 / 9, Math.max(3 / 4, v.videoWidth / v.videoHeight));
-                        setStageAspect(`${r.toFixed(4)} / 1`);
-                      }
-                    }}
-                  />
+                  <video ref={videoRef} playsInline muted autoPlay className="h-full w-full object-cover" />
                 ) : (
                   photoUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      ref={photoRef}
-                      src={photoUrl}
-                      alt="Votre photo"
-                      className="h-full w-full object-contain"
-                      onLoad={() => void detectPhoto()}
-                    />
+                    <img ref={photoRef} src={photoUrl} alt="Votre photo" className="h-full w-full object-cover" onLoad={() => void detectPhoto()} />
                   )
                 )}
-                {/* Le conteneur du visuel doit épouser la zone réellement affichée de la vidéo/photo (object-contain). */}
                 <OverlayBox sourceRef={mode === "camera" ? videoRef : photoRef}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img ref={overlayRef} src={frameImageUrl(frame)} alt="" style={overlayStyle} />
@@ -461,43 +417,69 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
               </div>
             </div>
 
-            {/* Caméra active, détecteur en cours de chargement : bandeau discret au lieu du voile */}
+            {/* Habillage : mode, monture, statut */}
+            <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2">
+              <div className="pointer-events-auto flex gap-1 rounded-full bg-ink/60 p-1 backdrop-blur" role="tablist" aria-label="Source de l'image">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === "camera"}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold ${mode === "camera" ? "bg-white text-ink" : "text-white/80"}`}
+                  onClick={switchToCamera}
+                >
+                  Caméra
+                </button>
+                <label role="tab" aria-selected={mode === "photo"} className={`cursor-pointer rounded-full px-3 py-1.5 text-xs font-semibold ${mode === "photo" ? "bg-white text-ink" : "text-white/80"}`}>
+                  Photo
+                  <input type="file" accept="image/*" capture="user" className="sr-only" onChange={(e) => onPhotoChosen(e.target.files?.[0])} />
+                </label>
+              </div>
+              <span className={`badge backdrop-blur ${faceSeen && status === "ready" ? "bg-brand-500/90 text-ink" : "bg-ink/60 text-white/90"}`}>
+                {status === "ready" ? (faceSeen ? "Visage détecté" : "Placez-vous face à la caméra") : status === "loading" ? "Chargement…" : "En attente"}
+              </span>
+            </div>
+
             {status === "loading" && cameraOn && (
-              <div className="absolute inset-x-3 top-3 flex items-center gap-2 rounded-xl bg-ink/75 px-3 py-2 text-xs text-white backdrop-blur">
+              <div className="absolute inset-x-3 top-14 flex items-center gap-2 rounded-xl bg-ink/70 px-3 py-2 text-xs text-white backdrop-blur">
                 <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
                 <span>{message}</span>
               </div>
             )}
 
-            {((status !== "ready" && !(status === "loading" && cameraOn)) || (mode === "photo" && !photoUrl)) && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-ink/70 p-6 text-center text-white">
-                {status === "loading" && (
-                  <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
-                )}
+            {/* Nom de la monture + capture */}
+            {status === "ready" && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-ink/70 to-transparent p-4">
+                <div className="min-w-0 text-white">
+                  <p className="truncate text-sm font-semibold">{frame.name} <span className="font-normal text-white/80">{COLOR_LABELS[frame.color]}</span></p>
+                  <p className="text-xs text-white/80">{formatFcfa(frame.priceFcfa)}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={takeSnapshot}
+                  disabled={!placement}
+                  aria-label="Prendre une photo"
+                  title="Prendre une photo"
+                  className="pointer-events-auto flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-4 border-white/90 bg-white/20 backdrop-blur transition hover:bg-white/40 disabled:opacity-40"
+                >
+                  <span className="h-10 w-10 rounded-full bg-white" />
+                </button>
+              </div>
+            )}
+
+            {showVeil && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-ink/75 p-6 text-center text-white">
+                {status === "loading" && <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />}
                 <p className="max-w-sm text-sm">
                   {message || (mode === "photo" ? "Choisissez une photo de face pour commencer." : "Activez la caméra pour voir la monture sur votre visage, en direct.")}
                 </p>
-                {status === "error" && detail && (
-                  <p className="max-w-sm break-all font-mono text-[11px] text-white/60" title="Détail technique">{detail}</p>
-                )}
-                {status === "idle" && mode === "camera" && (
+                {status === "error" && detail && <p className="max-w-sm break-all font-mono text-[11px] text-white/60">{detail}</p>}
+                {(status === "idle" || status === "error") && mode === "camera" && (
                   <div className="flex flex-wrap justify-center gap-2">
-                    <button type="button" className="btn-accent" onClick={() => void startCamera()}>
-                      Activer la caméra
+                    <button type="button" className="btn-lime" onClick={() => void startCamera()}>
+                      {status === "error" ? "Réessayer la caméra" : "Activer la caméra"}
                     </button>
                     <label className="btn cursor-pointer bg-white/15 text-white hover:bg-white/25">
                       Utiliser une photo
-                      <input type="file" accept="image/*" capture="user" className="sr-only" onChange={(e) => onPhotoChosen(e.target.files?.[0])} />
-                    </label>
-                  </div>
-                )}
-                {status === "error" && (
-                  <div className="flex flex-wrap justify-center gap-2">
-                    <button type="button" className="btn-accent btn-sm" onClick={() => void startCamera()}>
-                      Réessayer la caméra
-                    </button>
-                    <label className="btn btn-sm cursor-pointer bg-white/15 text-white hover:bg-white/25">
-                      Importer une photo
                       <input type="file" accept="image/*" capture="user" className="sr-only" onChange={(e) => onPhotoChosen(e.target.files?.[0])} />
                     </label>
                   </div>
@@ -506,18 +488,42 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
             )}
           </div>
 
-          <div className="grid gap-3 border-t border-ink/8 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-            <label className="text-xs font-medium text-ink-2">
-              Taille <span className="text-ink-3">({Math.round(sizeAdj * 100)} %)</span>
-              <input type="range" min="0.8" max="1.25" step="0.01" value={sizeAdj} onChange={(e) => setSizeAdj(Number(e.target.value))} className="mt-1 w-full accent-brand-700" />
-            </label>
-            <label className="text-xs font-medium text-ink-2">
-              Hauteur
-              <input type="range" min="-0.12" max="0.12" step="0.005" value={yAdj} onChange={(e) => setYAdj(Number(e.target.value))} className="mt-1 w-full accent-brand-700" />
-            </label>
-            <button type="button" className="btn-primary btn-sm" onClick={takeSnapshot} disabled={!pose || status !== "ready"}>
-              Prendre une photo
+          {/* Sélecteur de montures (défilement horizontal) */}
+          <div className="flex gap-2 overflow-x-auto px-3 py-3 [scrollbar-width:thin]" role="tablist" aria-label="Montures">
+            {frames.map((f) => (
+              <button
+                key={f.slug}
+                type="button"
+                role="tab"
+                aria-selected={f.slug === frame.slug}
+                onClick={() => setFrame(f)}
+                title={`${f.name} ${COLOR_LABELS[f.color]}`}
+                className={`flex h-16 w-24 shrink-0 items-center justify-center rounded-xl border-2 bg-paper-2 p-1.5 transition ${
+                  f.slug === frame.slug ? "border-brand-600 bg-white" : "border-transparent hover:border-brand-300"
+                }`}
+              >
+                <Image src={frameImageUrl(f)} alt="" width={f.image.width} height={f.image.height} unoptimized className="max-h-full w-auto max-w-full object-contain" />
+              </button>
+            ))}
+          </div>
+
+          {/* Réglages fins */}
+          <div className="border-t border-ink/8 px-4 py-2">
+            <button type="button" className="text-xs font-semibold text-brand-700" onClick={() => setShowAdjust((v) => !v)} aria-expanded={showAdjust}>
+              {showAdjust ? "Masquer les réglages" : "Ajuster la taille et la hauteur"}
             </button>
+            {showAdjust && (
+              <div className="mt-2 grid gap-3 pb-2 sm:grid-cols-2">
+                <label className="text-xs font-medium text-ink-2">
+                  Taille <span className="text-ink-3">({Math.round(sizeAdj * 100)} %)</span>
+                  <input type="range" min="0.8" max="1.25" step="0.01" value={sizeAdj} onChange={(e) => setSizeAdj(Number(e.target.value))} className="mt-1 w-full accent-brand-700" />
+                </label>
+                <label className="text-xs font-medium text-ink-2">
+                  Hauteur
+                  <input type="range" min="-0.12" max="0.12" step="0.005" value={yAdj} onChange={(e) => setYAdj(Number(e.target.value))} className="mt-1 w-full accent-brand-700" />
+                </label>
+              </div>
+            )}
           </div>
         </div>
 
@@ -526,12 +532,8 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm font-semibold">Votre essayage avec {frame.name} {COLOR_LABELS[frame.color]}</p>
               <div className="flex gap-2">
-                <a href={snapshot} download={`essayage-${frame.slug}.jpg`} className="btn-outline btn-sm">
-                  Télécharger
-                </a>
-                <button type="button" className="btn-ghost btn-sm" onClick={() => setSnapshot(null)}>
-                  Fermer
-                </button>
+                <a href={snapshot} download={`essayage-${frame.slug}.jpg`} className="btn-outline btn-sm">Télécharger</a>
+                <button type="button" className="btn-ghost btn-sm" onClick={() => setSnapshot(null)}>Fermer</button>
               </div>
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -541,11 +543,11 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
 
         <p className="mt-3 text-xs text-ink-3">
           Le traitement se fait entièrement dans votre navigateur : aucune image n&apos;est envoyée à nos serveurs.
-          L&apos;essayage virtuel donne un aperçu du style ; la taille et le confort se valident en boutique.
+          L&apos;essayage virtuel donne un aperçu du style ; la taille et le confort se valident en agence.
         </p>
       </div>
 
-      {/* Sélecteur de montures */}
+      {/* Fiche de la monture sélectionnée */}
       <aside className="lg:col-span-2">
         <div className="card p-4">
           <div className="flex items-start justify-between gap-3">
@@ -557,17 +559,14 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
             </div>
             <p className="text-sm font-semibold text-brand-800">{formatFcfa(frame.priceFcfa)}</p>
           </div>
+          {frame.description && <p className="mt-2 text-sm text-ink-2">{frame.description}</p>}
           <div className="mt-3 flex gap-2">
-            <Link href={`/montures/${frame.slug}`} className="btn-outline btn-sm flex-1">
-              Voir la fiche
-            </Link>
-            <Link href="/rendez-vous" className="btn-primary btn-sm flex-1">
-              Prendre rendez-vous
-            </Link>
+            <Link href={`/montures/${frame.slug}`} className="btn-outline btn-sm flex-1">Voir la fiche</Link>
+            <Link href="/rendez-vous" className="btn-primary btn-sm flex-1">Prendre rendez-vous</Link>
           </div>
         </div>
 
-        <div className="mt-4 grid max-h-[60vh] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-2">
+        <div className="mt-4 hidden max-h-[60vh] grid-cols-2 gap-2 overflow-y-auto pr-1 lg:grid">
           {frames.map((f) => (
             <button
               key={f.slug}
@@ -594,34 +593,18 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
   );
 }
 
-/**
- * Boîte absolument positionnée qui suit la zone réellement peinte de la source
- * (vidéo ou image en object-contain), pour que les coordonnées des repères
- * correspondent aux pixels affichés.
- */
-function OverlayBox({
-  sourceRef,
-  children,
-}: {
-  sourceRef: React.RefObject<HTMLVideoElement | HTMLImageElement | null>;
-  children: React.ReactNode;
-}) {
+/** Boîte absolument positionnée qui suit la zone réellement peinte de la source (object-cover). */
+function OverlayBox({ sourceRef, children }: { sourceRef: React.RefObject<HTMLVideoElement | HTMLImageElement | null>; children: React.ReactNode }) {
   const [box, setBox] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
 
   useEffect(() => {
     let raf = 0;
     const update = () => {
       const el = sourceRef.current;
-      if (!el) {
-        raf = requestAnimationFrame(update);
-        return;
-      }
-      const next = paintedBox(el);
+      const next = el ? paintedBox(el) : null;
       if (next) {
         setBox((prev) =>
-          prev && Math.abs(prev.width - next.width) < 0.5 && Math.abs(prev.left - next.left) < 0.5 && Math.abs(prev.top - next.top) < 0.5
-            ? prev
-            : next,
+          prev && Math.abs(prev.width - next.width) < 0.5 && Math.abs(prev.left - next.left) < 0.5 && Math.abs(prev.top - next.top) < 0.5 ? prev : next,
         );
       }
       raf = requestAnimationFrame(update);
@@ -631,7 +614,7 @@ function OverlayBox({
   }, [sourceRef]);
 
   return (
-    <div className="absolute" style={box ?? { display: "none" }} data-overlay-box>
+    <div className="absolute" style={box ?? { display: "none" }}>
       {children}
     </div>
   );
