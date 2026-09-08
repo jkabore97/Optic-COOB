@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { TryOn } from "@/components/TryOn";
+import { getCatalog } from "@/lib/catalog";
 
 export const metadata: Metadata = {
   title: "Essayage virtuel",
@@ -12,6 +13,7 @@ const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v
 export default async function TryOnPage({ searchParams }: PageProps<"/essayage">) {
   const sp = await searchParams;
   const slug = first(sp.monture);
+  const frames = await getCatalog();
   return (
     <div className="container-x py-10">
       <p className="eyebrow">Essayage virtuel</p>
@@ -21,7 +23,7 @@ export default async function TryOnPage({ searchParams }: PageProps<"/essayage">
         Changez de modèle d&apos;un simple clic, puis prenez une photo pour la partager ou la montrer en boutique.
       </p>
       <div className="mt-8">
-        <TryOn initialSlug={slug} />
+        <TryOn frames={frames} initialSlug={slug} />
       </div>
     </div>
   );

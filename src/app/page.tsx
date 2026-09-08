@@ -3,9 +3,8 @@ import Link from "next/link";
 import { FrameCard } from "@/components/FrameCard";
 import { HeroGlasses } from "@/components/HeroGlasses";
 import { AGENCIES, BRANDS, BUSINESS, OPENING_HOURS, WEEKDAY_LABELS, type Weekday } from "@/lib/config";
-import { FRAMES } from "@/lib/frames";
+import { getCatalog } from "@/lib/catalog";
 
-const FEATURED = ["kadiogo-noir", "yennenga-papillon", "sahel-aviateur", "nazinga-rond"];
 
 const SERVICES = [
   {
@@ -45,8 +44,9 @@ const hours = (d: Weekday) =>
     ? "Fermé"
     : OPENING_HOURS[d].map((p) => `${p.open.replace(":", "h")} – ${p.close.replace(":", "h")}`).join(" / ");
 
-export default function HomePage() {
-  const featured = FEATURED.map((slug) => FRAMES.find((f) => f.slug === slug)!).filter(Boolean);
+export default async function HomePage() {
+  const catalog = await getCatalog();
+  const featured = catalog.slice(0, 4);
 
   return (
     <>

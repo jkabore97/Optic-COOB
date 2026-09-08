@@ -4,14 +4,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FaceLandmarker, NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { COLOR_LABELS, COLOR_SWATCH, FRAMES, formatFcfa, frameImageUrl, type Frame } from "@/lib/frames";
+import { COLOR_LABELS, COLOR_SWATCH, formatFcfa, frameImageUrl, type Frame } from "@/lib/frames";
+import { eyePose, placeOverlay, placementToCss, smoothPose, type EyePose } from "@/lib/tryon-math";
 
 /**
  * Essayage virtuel : détection des repères du visage dans le navigateur (MediaPipe
  * Face Landmarker) et superposition du visuel de la monture. Aucune image n'est envoyée
  * à un serveur.
  *
- * Repère des visuels : viewBox 1000×400, centres des verres en (290,200) et (710,200).
+ * Chaque visuel déclare la position des deux centres de verres (voir src/lib/tryon-math.ts) ;
+ * ils sont alignés sur les pupilles détectées.
  */
 
 // Fichiers servis depuis notre domaine (voir scripts/setup-mediapipe.mjs). Surchargeables
@@ -19,22 +21,8 @@ import { COLOR_LABELS, COLOR_SWATCH, FRAMES, formatFcfa, frameImageUrl, type Fra
 const WASM_URL = process.env.NEXT_PUBLIC_MEDIAPIPE_WASM_URL ?? "/mediapipe/wasm";
 const MODEL_URL = process.env.NEXT_PUBLIC_FACE_MODEL_URL ?? "/mediapipe/face_landmarker.task";
 
-const SVG_W = 1000;
-const SVG_H = 400;
-const SVG_PD = 420; // distance entre les centres des verres dans le visuel
-const SVG_MID = { x: 500, y: 200 };
-
 type Mode = "camera" | "photo";
 type Status = "idle" | "loading" | "ready" | "error";
-
-interface Pose {
-  /** Point milieu entre les pupilles, en pixels de l'élément affiché. */
-  mid: { x: number; y: number };
-  /** Angle d'inclinaison (roulis) en radians. */
-  angle: number;
-  /** Facteur d'échelle du visuel (pixels affichés / unités SVG). */
-  scale: number;
-}
 
 interface Point {
   x: number;
@@ -74,33 +62,17 @@ function paintedBox(el: HTMLVideoElement | HTMLImageElement) {
   return { left: (cw - width) / 2, top: (ch - height) / 2, width, height };
 }
 
-function poseFromPupils(a: Point, b: Point, w: number, h: number): Pose {
-  const ax = a.x * w, ay = a.y * h, bx = b.x * w, by = b.y * h;
-  // Garantit que `a` est à gauche dans l'image (x plus petit)
-  const [lx, ly, rx, ry] = ax <= bx ? [ax, ay, bx, by] : [bx, by, ax, ay];
-  const dx = rx - lx, dy = ry - ly;
-  return {
-    mid: { x: (lx + rx) / 2, y: (ly + ry) / 2 },
-    angle: Math.atan2(dy, dx),
-    scale: Math.hypot(dx, dy) / SVG_PD,
-  };
+/** Pose des yeux en pixels affichés, à partir des repères normalisés. */
+function poseFromPupils(a: Point, b: Point, w: number, h: number): EyePose {
+  return eyePose({ x: a.x * w, y: a.y * h }, { x: b.x * w, y: b.y * h });
 }
 
-function smooth(prev: Pose | null, next: Pose, alpha = 0.45): Pose {
-  if (!prev) return next;
-  return {
-    mid: { x: prev.mid.x + (next.mid.x - prev.mid.x) * alpha, y: prev.mid.y + (next.mid.y - prev.mid.y) * alpha },
-    angle: prev.angle + (next.angle - prev.angle) * alpha,
-    scale: prev.scale + (next.scale - prev.scale) * alpha,
-  };
-}
-
-export function TryOn({ initialSlug }: { initialSlug?: string }) {
-  const [frame, setFrame] = useState<Frame>(() => FRAMES.find((f) => f.slug === initialSlug) ?? FRAMES[0]);
+export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: string }) {
+  const [frame, setFrame] = useState<Frame>(() => frames.find((f) => f.slug === initialSlug) ?? frames[0]);
   const [mode, setMode] = useState<Mode>("camera");
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState<string>("");
-  const [pose, setPose] = useState<Pose | null>(null);
+  const [pose, setPose] = useState<EyePose | null>(null);
   const [faceSeen, setFaceSeen] = useState(false);
   const [sizeAdj, setSizeAdj] = useState(1);
   const [yAdj, setYAdj] = useState(0);
@@ -114,7 +86,7 @@ export function TryOn({ initialSlug }: { initialSlug?: string }) {
   const landmarkerRef = useRef<FaceLandmarker | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
-  const poseRef = useRef<Pose | null>(null);
+  const poseRef = useRef<EyePose | null>(null);
   const lastVideoTime = useRef(-1);
   const runningMode = useRef<"VIDEO" | "IMAGE">("VIDEO");
 
@@ -187,7 +159,7 @@ export function TryOn({ initialSlug }: { initialSlug?: string }) {
           const box = p ? paintedBox(video) : null;
           if (p && box) {
             const next = poseFromPupils(p.a, p.b, box.width, box.height);
-            poseRef.current = smooth(poseRef.current, next);
+            poseRef.current = smoothPose(poseRef.current, next);
             setPose(poseRef.current);
             setFaceSeen(true);
           } else {
@@ -273,20 +245,20 @@ export function TryOn({ initialSlug }: { initialSlug?: string }) {
 
   const overlayStyle = useMemo(() => {
     if (!pose) return { display: "none" } as const;
-    const s = pose.scale * sizeAdj;
+    const placement = placeOverlay(pose, frame.image, sizeAdj, yAdj * frame.image.height);
     return {
       display: "block",
       position: "absolute" as const,
       left: 0,
       top: 0,
-      width: SVG_W,
-      height: SVG_H,
+      width: frame.image.width,
+      height: frame.image.height,
       maxWidth: "none",
       transformOrigin: "0 0",
-      transform: `translate(${pose.mid.x}px, ${pose.mid.y}px) rotate(${pose.angle}rad) scale(${s}) translate(${-SVG_MID.x}px, ${-SVG_MID.y + yAdj}px)`,
+      transform: placementToCss(placement),
       pointerEvents: "none" as const,
     };
-  }, [pose, sizeAdj, yAdj]);
+  }, [pose, frame.image, sizeAdj, yAdj]);
 
   /** Capture une image composite (source + monture) pour la partager. */
   const takeSnapshot = () => {
@@ -307,12 +279,12 @@ export function TryOn({ initialSlug }: { initialSlug?: string }) {
       ctx.scale(-1, 1);
     }
     ctx.drawImage(src, 0, 0, naturalW, naturalH);
+    const placement = placeOverlay(pose, frame.image, sizeAdj, yAdj * frame.image.height);
     ctx.save();
-    ctx.translate(pose.mid.x * k, pose.mid.y * k);
-    ctx.rotate(pose.angle);
-    const s = pose.scale * sizeAdj * k;
-    ctx.scale(s, s);
-    ctx.drawImage(overlay, -SVG_MID.x, -SVG_MID.y + yAdj, SVG_W, SVG_H);
+    ctx.translate(placement.tx * k, placement.ty * k);
+    ctx.rotate(placement.rotation);
+    ctx.scale(placement.scale * k, placement.scale * k);
+    ctx.drawImage(overlay, -placement.ox, -placement.oy, frame.image.width, frame.image.height);
     ctx.restore();
     setSnapshot(canvas.toDataURL("image/jpeg", 0.92));
   };
@@ -375,7 +347,7 @@ export function TryOn({ initialSlug }: { initialSlug?: string }) {
                 {/* Le conteneur du visuel doit épouser la zone réellement affichée de la vidéo/photo (object-contain). */}
                 <OverlayBox sourceRef={mode === "camera" ? videoRef : photoRef}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img ref={overlayRef} src={frameImageUrl(frame)} alt="" style={overlayStyle} crossOrigin="anonymous" />
+                  <img ref={overlayRef} src={frameImageUrl(frame)} alt="" style={overlayStyle} />
                 </OverlayBox>
               </div>
             </div>
@@ -421,7 +393,7 @@ export function TryOn({ initialSlug }: { initialSlug?: string }) {
             </label>
             <label className="text-xs font-medium text-ink-2">
               Hauteur
-              <input type="range" min="-40" max="40" step="1" value={yAdj} onChange={(e) => setYAdj(Number(e.target.value))} className="mt-1 w-full accent-brand-700" />
+              <input type="range" min="-0.12" max="0.12" step="0.005" value={yAdj} onChange={(e) => setYAdj(Number(e.target.value))} className="mt-1 w-full accent-brand-700" />
             </label>
             <button type="button" className="btn-primary btn-sm" onClick={takeSnapshot} disabled={!pose || status !== "ready"}>
               Prendre une photo
@@ -476,7 +448,7 @@ export function TryOn({ initialSlug }: { initialSlug?: string }) {
         </div>
 
         <div className="mt-4 grid max-h-[60vh] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-2">
-          {FRAMES.map((f) => (
+          {frames.map((f) => (
             <button
               key={f.slug}
               type="button"
@@ -487,7 +459,7 @@ export function TryOn({ initialSlug }: { initialSlug?: string }) {
               }`}
             >
               <div className="flex aspect-[5/2] items-center justify-center rounded-lg bg-paper-2 px-2">
-                <Image src={frameImageUrl(f)} alt="" width={1000} height={400} unoptimized className="h-auto w-full" />
+                <Image src={frameImageUrl(f)} alt="" width={f.image.width} height={f.image.height} unoptimized className="max-h-full w-auto max-w-full object-contain" />
               </div>
               <p className="mt-1.5 truncate text-xs font-semibold">{f.name}</p>
               <p className="flex items-center gap-1 text-[11px] text-ink-3">

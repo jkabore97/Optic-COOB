@@ -14,14 +14,14 @@ export function FrameCard({ frame }: { frame: Frame }) {
   return (
     <article className="card group overflow-hidden">
       <Link href={`/montures/${frame.slug}`} className="block">
-        <div className="relative flex aspect-[5/3] items-center justify-center bg-paper-2 px-6">
+        <div className="relative flex aspect-[5/3] items-center justify-center bg-paper-2 p-6">
           <Image
             src={frameImageUrl(frame)}
             alt={`${frame.name} ${COLOR_LABELS[frame.color]}`}
-            width={1000}
-            height={400}
+            width={frame.image.width}
+            height={frame.image.height}
             unoptimized
-            className="h-auto w-full transition-transform duration-300 group-hover:scale-[1.04]"
+            className="max-h-full w-auto max-w-full object-contain transition-transform duration-300 group-hover:scale-[1.04]"
           />
           {frame.tags?.[0] && (
             <span className="badge absolute left-3 top-3 bg-accent-100 text-accent-700 capitalize">{frame.tags[0]}</span>

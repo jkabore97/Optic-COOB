@@ -6,7 +6,7 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { FRAMES, type Frame, type FrameColor, type FrameShape } from "../src/lib/frames.ts";
+import { BUILTIN_FRAMES as FRAMES, type Frame, type FrameColor, type FrameShape } from "../src/lib/frames.ts";
 
 const OUT = path.resolve(import.meta.dirname, "../public/frames");
 const CX = 290; // centre du verre gauche ; le droit est en 1000 - CX

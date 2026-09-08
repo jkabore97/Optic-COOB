@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import { BUSINESS } from "@/lib/config";
-import { FRAMES, COLOR_LABELS, type Frame } from "@/lib/frames";
+import { BUILTIN_FRAMES, COLOR_LABELS, type Frame } from "@/lib/frames";
 import { Glasses3D } from "./Glasses3D";
 
 const SHOWCASE = ["bobo-wayfarer", "sahel-aviateur", "yennenga-papillon", "nazinga-rond", "ouaga-cristal"]
-  .map((slug) => FRAMES.find((f) => f.slug === slug)!)
+  .map((slug) => BUILTIN_FRAMES.find((f) => f.slug === slug)!)
   .filter(Boolean);
 
 /** Visuel 3D animé de la page d'accueil, avec un mini-sélecteur de montures. */

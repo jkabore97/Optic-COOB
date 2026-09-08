@@ -1,7 +1,12 @@
 import postgres, { type Sql } from "postgres";
 import { newId } from "../ids";
+import { rowToFrame } from "./frame-rows";
+import { PG_SCHEMA } from "./schema";
 import type {
   Appointment,
+  CatalogFrameInput,
+  CatalogFrameRecord,
+  FrameImageBlob,
   NewAppointment,
   NewOrder,
   Order,
@@ -11,6 +16,7 @@ import type {
 } from "./types";
 
 type Row = Record<string, unknown>;
+type ImageInput = { mime: string; bytes: Uint8Array } | null | undefined;
 
 const iso = (v: unknown): string | null =>
   v == null ? null : v instanceof Date ? v.toISOString() : String(v);
@@ -69,9 +75,10 @@ function rowToSms(r: Row): SmsLog {
   };
 }
 
-/** Stockage PostgreSQL (Supabase, Neon…). Schéma : src/lib/db/schema.sql */
+/** Stockage PostgreSQL (Supabase, Neon…). Le schéma est créé automatiquement au premier accès. */
 export class PgStore implements Store {
   private readonly sql: Sql;
+  private schemaReady: Promise<void> | null = null;
 
   constructor(url: string) {
     this.sql = postgres(url, {
@@ -84,7 +91,24 @@ export class PgStore implements Store {
     });
   }
 
+  /** Crée les tables manquantes (instructions idempotentes), une fois par processus. */
+  ready(): Promise<void> {
+    if (!this.schemaReady) {
+      this.schemaReady = this.sql
+        .unsafe(PG_SCHEMA)
+        .then(() => undefined)
+        .catch((err) => {
+          this.schemaReady = null;
+          throw err;
+        });
+    }
+    return this.schemaReady;
+  }
+
+  // ---- Rendez-vous ----
+
   async createAppointment(input: NewAppointment): Promise<Appointment> {
+    await this.ready();
     const id = newId();
     const [row] = await this.sql`
       insert into appointments (id, code, name, phone, agency, date, time, reason, notes, status)
@@ -95,11 +119,13 @@ export class PgStore implements Store {
   }
 
   async getAppointment(id: string): Promise<Appointment | null> {
+    await this.ready();
     const [row] = await this.sql`select * from appointments where id = ${id}`;
     return row ? rowToAppointment(row) : null;
   }
 
   async listAppointments(opts: { from?: string; to?: string }): Promise<Appointment[]> {
+    await this.ready();
     const rows = await this.sql`
       select * from appointments
       where (${opts.from ?? null}::date is null or date >= ${opts.from ?? null}::date)
@@ -109,6 +135,7 @@ export class PgStore implements Store {
   }
 
   async bookedTimes(date: string, agency: string): Promise<string[]> {
+    await this.ready();
     const rows = await this.sql`
       select time from appointments
       where date = ${date}::date and agency = ${agency} and status <> 'cancelled'`;
@@ -119,6 +146,7 @@ export class PgStore implements Store {
     id: string,
     patch: Partial<Pick<Appointment, "status" | "confirmationSmsAt" | "reminderSmsAt">>,
   ): Promise<Appointment | null> {
+    await this.ready();
     const [row] = await this.sql`
       update appointments set
         status = coalesce(${patch.status ?? null}, status),
@@ -128,7 +156,10 @@ export class PgStore implements Store {
     return row ? rowToAppointment(row) : null;
   }
 
+  // ---- Commandes ----
+
   async createOrder(input: NewOrder): Promise<Order> {
+    await this.ready();
     const id = newId();
     const [row] = await this.sql`
       insert into orders (id, code, customer_name, phone, agency, frame, lenses, notes, total_fcfa, paid_fcfa, status)
@@ -139,17 +170,20 @@ export class PgStore implements Store {
   }
 
   async getOrder(id: string): Promise<Order | null> {
+    await this.ready();
     const [row] = await this.sql`select * from orders where id = ${id}`;
     return row ? rowToOrder(row) : null;
   }
 
   async findOrder(code: string, phone: string): Promise<Order | null> {
+    await this.ready();
     const [row] = await this.sql`
       select * from orders where code = ${code.trim().toUpperCase()} and phone = ${phone}`;
     return row ? rowToOrder(row) : null;
   }
 
   async listOrders(opts: { status?: OrderStatus | "active" }): Promise<Order[]> {
+    await this.ready();
     const rows =
       opts.status === "active"
         ? await this.sql`select * from orders where status <> 'collected' order by created_at desc`
@@ -163,6 +197,7 @@ export class PgStore implements Store {
     id: string,
     patch: Partial<Pick<Order, "status" | "readyAt" | "collectedAt" | "readySmsAt" | "notes">>,
   ): Promise<Order | null> {
+    await this.ready();
     const [row] = await this.sql`
       update orders set
         status = coalesce(${patch.status ?? null}, status),
@@ -175,7 +210,10 @@ export class PgStore implements Store {
     return row ? rowToOrder(row) : null;
   }
 
+  // ---- SMS ----
+
   async logSms(entry: Omit<SmsLog, "id" | "createdAt">): Promise<SmsLog> {
+    await this.ready();
     const id = newId();
     const [row] = await this.sql`
       insert into sms_log (id, "to", body, provider, status, provider_id, error, related_type, related_id)
@@ -186,7 +224,94 @@ export class PgStore implements Store {
   }
 
   async listSms(limit = 50): Promise<SmsLog[]> {
+    await this.ready();
     const rows = await this.sql`select * from sms_log order by created_at desc limit ${limit}`;
     return rows.map(rowToSms);
+  }
+
+  // ---- Catalogue ----
+
+  async listFrames(opts: { includeInactive?: boolean } = {}): Promise<CatalogFrameRecord[]> {
+    await this.ready();
+    const rows = opts.includeInactive
+      ? await this.sql`select * from frames order by sort_order, created_at`
+      : await this.sql`select * from frames where active order by sort_order, created_at`;
+    return rows.map(rowToFrame);
+  }
+
+  async getFrame(id: string): Promise<CatalogFrameRecord | null> {
+    await this.ready();
+    const [row] = await this.sql`select * from frames where id = ${id}`;
+    return row ? rowToFrame(row) : null;
+  }
+
+  async getFrameBySlug(slug: string): Promise<CatalogFrameRecord | null> {
+    await this.ready();
+    const [row] = await this.sql`select * from frames where slug = ${slug}`;
+    return row ? rowToFrame(row) : null;
+  }
+
+  async createFrame(input: CatalogFrameInput, image: ImageInput): Promise<CatalogFrameRecord> {
+    await this.ready();
+    const id = newId();
+    const imageBuf = image ? Buffer.from(image.bytes) : null;
+    const [row] = await this.sql`
+      insert into frames (id, slug, name, collection, shape, material, color, gender, price_fcfa,
+        size_lens, size_bridge, size_temple, description, tags, image, image_mime, image_width, image_height,
+        anchor_lx, anchor_ly, anchor_rx, anchor_ry, active, sort_order)
+      values (${id}, ${input.slug}, ${input.name}, ${input.collection}, ${input.shape}, ${input.material},
+        ${input.color}, ${input.gender}, ${input.priceFcfa}, ${input.sizeLens}, ${input.sizeBridge}, ${input.sizeTemple},
+        ${input.description}, ${input.tags.join(",")}, ${imageBuf}, ${image?.mime ?? null},
+        ${input.imageWidth}, ${input.imageHeight}, ${input.anchorLx}, ${input.anchorLy}, ${input.anchorRx}, ${input.anchorRy},
+        ${input.active}, ${input.sortOrder})
+      returning *`;
+    return rowToFrame(row);
+  }
+
+  async updateFrame(id: string, patch: Partial<CatalogFrameInput>, image?: ImageInput): Promise<CatalogFrameRecord | null> {
+    await this.ready();
+    const imageBuf = image ? Buffer.from(image.bytes) : null;
+    const tags = patch.tags ? patch.tags.join(",") : null;
+    const [row] = await this.sql`
+      update frames set
+        slug = coalesce(${patch.slug ?? null}, slug),
+        name = coalesce(${patch.name ?? null}, name),
+        collection = coalesce(${patch.collection ?? null}, collection),
+        shape = coalesce(${patch.shape ?? null}, shape),
+        material = coalesce(${patch.material ?? null}, material),
+        color = coalesce(${patch.color ?? null}, color),
+        gender = coalesce(${patch.gender ?? null}, gender),
+        price_fcfa = coalesce(${patch.priceFcfa ?? null}, price_fcfa),
+        size_lens = coalesce(${patch.sizeLens ?? null}, size_lens),
+        size_bridge = coalesce(${patch.sizeBridge ?? null}, size_bridge),
+        size_temple = coalesce(${patch.sizeTemple ?? null}, size_temple),
+        description = coalesce(${patch.description ?? null}, description),
+        tags = coalesce(${tags}, tags),
+        image = coalesce(${imageBuf}, image),
+        image_mime = coalesce(${image?.mime ?? null}, image_mime),
+        image_width = coalesce(${patch.imageWidth ?? null}, image_width),
+        image_height = coalesce(${patch.imageHeight ?? null}, image_height),
+        anchor_lx = coalesce(${patch.anchorLx ?? null}, anchor_lx),
+        anchor_ly = coalesce(${patch.anchorLy ?? null}, anchor_ly),
+        anchor_rx = coalesce(${patch.anchorRx ?? null}, anchor_rx),
+        anchor_ry = coalesce(${patch.anchorRy ?? null}, anchor_ry),
+        active = coalesce(${patch.active ?? null}, active),
+        sort_order = coalesce(${patch.sortOrder ?? null}, sort_order),
+        updated_at = now()
+      where id = ${id} returning *`;
+    return row ? rowToFrame(row) : null;
+  }
+
+  async deleteFrame(id: string): Promise<boolean> {
+    await this.ready();
+    const rows = await this.sql`delete from frames where id = ${id} returning id`;
+    return rows.length > 0;
+  }
+
+  async getFrameImage(id: string): Promise<FrameImageBlob | null> {
+    await this.ready();
+    const [row] = await this.sql`select image, image_mime, updated_at from frames where id = ${id}`;
+    if (!row || !row.image || !row.image_mime) return null;
+    return { mime: String(row.image_mime), bytes: row.image as Uint8Array, updatedAt: iso(row.updated_at)! };
   }
 }

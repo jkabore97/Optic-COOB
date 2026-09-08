@@ -9,6 +9,7 @@ export const metadata: Metadata = { robots: { index: false } };
 const NAV = [
   { href: "/admin", label: "Tableau de bord" },
   { href: "/admin/commandes", label: "Commandes" },
+  { href: "/admin/montures", label: "Montures" },
   { href: "/admin/rendez-vous", label: "Rendez-vous" },
   { href: "/admin/sms", label: "Journal SMS" },
 ];

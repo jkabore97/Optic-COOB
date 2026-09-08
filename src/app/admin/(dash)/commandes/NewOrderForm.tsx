@@ -3,9 +3,8 @@
 import { useActionState } from "react";
 import { createOrderAction } from "@/app/admin/actions";
 import { AGENCIES, MAIN_AGENCY } from "@/lib/config";
-import { FRAMES, COLOR_LABELS } from "@/lib/frames";
 
-export function NewOrderForm() {
+export function NewOrderForm({ frameNames }: { frameNames: string[] }) {
   const [state, action, pending] = useActionState(createOrderAction, undefined);
   return (
     <form action={action} className="card grid gap-4 p-5">
@@ -31,8 +30,8 @@ export function NewOrderForm() {
           <label htmlFor="frame" className="label">Monture</label>
           <input id="frame" name="frame" className="field" list="frames" placeholder="Ex. Kadiogo Noir ou référence fournisseur" />
           <datalist id="frames">
-            {FRAMES.map((f) => (
-              <option key={f.slug} value={`${f.name} ${COLOR_LABELS[f.color]}`} />
+            {frameNames.map((n) => (
+              <option key={n} value={n} />
             ))}
           </datalist>
         </div>
