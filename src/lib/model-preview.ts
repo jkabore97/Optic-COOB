@@ -3,7 +3,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { loadGlbModel } from "./tryon-3d";
 
 /** Aperçu tournant d'un modèle GLB de lunettes (espace équipe). Retourne une fonction de nettoyage. */
-export function mountModelPreview(host: HTMLElement, url: string, onError?: (err: unknown) => void): () => void {
+export function mountModelPreview(host: HTMLElement, url: string, rotation: [number, number, number] = [0, 0, 0], onError?: (err: unknown) => void): () => void {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -35,7 +35,7 @@ export function mountModelPreview(host: HTMLElement, url: string, onError?: (err
   ro.observe(host);
   resize();
 
-  loadGlbModel(url)
+  loadGlbModel(url, rotation)
     .then((model) => {
       if (disposed) return;
       pivot.add(model.object);

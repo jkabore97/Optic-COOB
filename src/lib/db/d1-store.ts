@@ -1,7 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { newId } from "../ids";
 import { rowToFrame } from "./frame-rows";
-import { SQLITE_SCHEMA, splitStatements } from "./schema";
+import { SQLITE_MIGRATIONS, SQLITE_SCHEMA, splitStatements } from "./schema";
 import type {
   Appointment,
   CatalogFrameInput,
@@ -86,7 +86,17 @@ export class D1Store implements Store {
   ready(): Promise<void> {
     let p = D1Store.schemaReady.get(this.db);
     if (!p) {
-      p = this.db.batch(splitStatements(SQLITE_SCHEMA).map((s) => this.db.prepare(s))).then(() => undefined);
+      p = this.db
+        .batch(splitStatements(SQLITE_SCHEMA).map((s) => this.db.prepare(s)))
+        .then(async () => {
+          for (const m of SQLITE_MIGRATIONS) {
+            try {
+              await this.db.prepare(m).run();
+            } catch (err) {
+              if (!/duplicate column/i.test(String(err))) throw err;
+            }
+          }
+        });
       D1Store.schemaReady.set(this.db, p);
       p.catch(() => D1Store.schemaReady.delete(this.db));
     }
@@ -246,7 +256,7 @@ export class D1Store implements Store {
   async listFrames(opts: { includeInactive?: boolean } = {}): Promise<CatalogFrameRecord[]> {
     await this.ready();
     const { results } = await this.db
-      .prepare(`select f.*, m.updated_at as model_updated_at from frames f left join frame_models m on m.frame_id = f.id where (? = 1 or f.active = 1) order by f.sort_order, f.created_at`)
+      .prepare(`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation from frames f left join frame_models m on m.frame_id = f.id where (? = 1 or f.active = 1) order by f.sort_order, f.created_at`)
       .bind(opts.includeInactive ? 1 : 0)
       .all<Row>();
     return results.map(rowToFrame);
@@ -254,13 +264,13 @@ export class D1Store implements Store {
 
   async getFrame(id: string): Promise<CatalogFrameRecord | null> {
     await this.ready();
-    const row = await this.db.prepare(`select f.*, m.updated_at as model_updated_at from frames f left join frame_models m on m.frame_id = f.id where f.id = ?`).bind(id).first<Row>();
+    const row = await this.db.prepare(`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation from frames f left join frame_models m on m.frame_id = f.id where f.id = ?`).bind(id).first<Row>();
     return row ? rowToFrame(row) : null;
   }
 
   async getFrameBySlug(slug: string): Promise<CatalogFrameRecord | null> {
     await this.ready();
-    const row = await this.db.prepare(`select f.*, m.updated_at as model_updated_at from frames f left join frame_models m on m.frame_id = f.id where f.slug = ?`).bind(slug).first<Row>();
+    const row = await this.db.prepare(`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation from frames f left join frame_models m on m.frame_id = f.id where f.slug = ?`).bind(slug).first<Row>();
     return row ? rowToFrame(row) : null;
   }
 
@@ -318,6 +328,11 @@ export class D1Store implements Store {
       )
       .bind(frameId, model.mime, toArrayBuffer(model.bytes), new Date().toISOString())
       .run();
+  }
+
+  async setFrameModelRotation(frameId: string, rotation: [number, number, number]): Promise<void> {
+    await this.ready();
+    await this.db.prepare(`update frame_models set rotation = ? where frame_id = ?`).bind(rotation.join(","), frameId).run();
   }
 
   async deleteFrameModel(frameId: string): Promise<void> {

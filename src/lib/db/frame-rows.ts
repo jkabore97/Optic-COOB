@@ -5,6 +5,11 @@ const str = (v: unknown, fallback = "") => (v == null ? fallback : String(v));
 const num = (v: unknown) => (v == null ? 0 : Number(v));
 const iso = (v: unknown): string => (v instanceof Date ? v.toISOString() : str(v));
 
+export function parseRotation(v: unknown): [number, number, number] {
+  const parts = str(v).split(",").map(Number);
+  return parts.length === 3 && parts.every(Number.isFinite) ? [parts[0], parts[1], parts[2]] : [0, 0, 0];
+}
+
 /** Conversion d'une ligne SQL (Postgres ou SQLite) en enregistrement de monture. */
 export function rowToFrame(r: Row): CatalogFrameRecord {
   return {
@@ -34,5 +39,6 @@ export function rowToFrame(r: Row): CatalogFrameRecord {
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
     modelUpdatedAt: r.model_updated_at == null ? null : iso(r.model_updated_at),
+    modelRotation: parseRotation(r.model_rotation),
   };
 }

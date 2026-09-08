@@ -400,7 +400,7 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     import("@/lib/tryon-3d")
       .then(async ({ loadGlbModel, proceduralModel }) => {
         const model = frame.model
-          ? await loadGlbModel(frame.model.url)
+          ? await loadGlbModel(frame.model.url, frame.model.rotation)
           : proceduralModel({ shape: frame.shape, material: frame.material, color: COLOR_SWATCH[frame.color], colorKey: frame.color, autoRotate: false, interactive: false });
         if (cancelled) return;
         engine.setModel(model);

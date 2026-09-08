@@ -133,9 +133,11 @@ export interface CatalogFrameRecord {
   updatedAt: string;
   /** Date du modèle 3D (GLB) associé, null si aucun. */
   modelUpdatedAt: string | null;
+  /** Rotation à appliquer au modèle 3D (degrés X, Y, Z), pour les fichiers mal orientés. */
+  modelRotation: [number, number, number];
 }
 
-export type CatalogFrameInput = Omit<CatalogFrameRecord, "id" | "createdAt" | "updatedAt" | "imageMime" | "modelUpdatedAt">;
+export type CatalogFrameInput = Omit<CatalogFrameRecord, "id" | "createdAt" | "updatedAt" | "imageMime" | "modelUpdatedAt" | "modelRotation">;
 
 export interface FrameImageBlob {
   mime: string;
@@ -167,6 +169,7 @@ export interface FrameModelBlob {
 
 export interface CatalogModelStore {
   setFrameModel(frameId: string, model: { mime: string; bytes: Uint8Array }): Promise<void>;
+  setFrameModelRotation(frameId: string, rotation: [number, number, number]): Promise<void>;
   deleteFrameModel(frameId: string): Promise<void>;
   getFrameModel(frameId: string): Promise<FrameModelBlob | null>;
 }

@@ -185,6 +185,14 @@ create table if not exists frame_models (
 );
 `;
 
+/** Migrations additives (exécutées une par une ; une colonne déjà présente est ignorée). */
+export const PG_MIGRATIONS = [
+  `alter table frame_models add column if not exists rotation text not null default '0,0,0'`,
+];
+export const SQLITE_MIGRATIONS = [
+  `alter table frame_models add column rotation text not null default '0,0,0'`,
+];
+
 /** Découpe un script en instructions (pour les moteurs sans exécution multi-instructions). */
 export function splitStatements(script: string): string[] {
   return script

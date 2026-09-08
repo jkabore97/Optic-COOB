@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /** Aperçu 3D d'un fichier GLB (URL ou data URL). */
-export function ModelPreview({ url }: { url: string }) {
+export function ModelPreview({ url, rotation = [0, 0, 0] }: { url: string; rotation?: [number, number, number] }) {
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
 
@@ -14,13 +14,13 @@ export function ModelPreview({ url }: { url: string }) {
     let cancelled = false;
     import("@/lib/model-preview").then(({ mountModelPreview }) => {
       if (cancelled) return;
-      cleanup = mountModelPreview(host, url, () => setError("Ce fichier n'a pas pu être lu comme un modèle GLB."));
+      cleanup = mountModelPreview(host, url, rotation, () => setError("Ce fichier n'a pas pu être lu comme un modèle GLB."));
     });
     return () => {
       cancelled = true;
       cleanup?.();
     };
-  }, [url]);
+  }, [url, rotation]);
 
   return (
     <div className="relative aspect-[5/3] w-full overflow-hidden rounded-xl bg-[radial-gradient(70%_60%_at_50%_40%,#ffffff_0%,#f1f2ea_70%,#e6e8da_100%)]">
