@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" width="1000" height="400" role="img" aria-label="Loumbila noir">
+  <defs>
+    
+    <linearGradient id="glare" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.02"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.10"/>
+    </linearGradient>
+  </defs>
+  <g>
+    
+    <rect x="157.5" y="149" width="16" height="12" rx="4" fill="#1a1a1a" stroke="#050505" stroke-width="2"/>
+    <rect x="826.5" y="149" width="16" height="12" rx="4" fill="#1a1a1a" stroke="#050505" stroke-width="2"/>
+    
+    <g transform=" translate(290,200)">
+      <path d="M -86 -74 H 86 A 30 30 0 0 1 116 -44
+    V 44 A 30 30 0 0 1 86 74 H -86
+    A 30 30 0 0 1 -116 44 V -44 A 30 30 0 0 1 -86 -74 Z" fill="rgba(120,160,200,0.10)"/>
+      <path d="M -86 -74 H 86 A 30 30 0 0 1 116 -44
+    V 44 A 30 30 0 0 1 86 74 H -86
+    A 30 30 0 0 1 -116 44 V -44 A 30 30 0 0 1 -86 -74 Z" fill="url(#glare)" opacity="0.9"/>
+      <path d="M -86 -74 H 86 A 30 30 0 0 1 116 -44
+    V 44 A 30 30 0 0 1 86 74 H -86
+    A 30 30 0 0 1 -116 44 V -44 A 30 30 0 0 1 -86 -74 Z" fill="none" stroke="#050505" stroke-width="13" stroke-linejoin="round"/>
+      <path d="M -86 -74 H 86 A 30 30 0 0 1 116 -44
+    V 44 A 30 30 0 0 1 86 74 H -86
+    A 30 30 0 0 1 -116 44 V -44 A 30 30 0 0 1 -86 -74 Z" fill="none" stroke="#1a1a1a" stroke-width="9" stroke-linejoin="round"/>
+      <path d="M -86 -74 H 86 A 30 30 0 0 1 116 -44
+    V 44 A 30 30 0 0 1 86 74 H -86
+    A 30 30 0 0 1 -116 44 V -44 A 30 30 0 0 1 -86 -74 Z" fill="none" stroke="#3a3a3a" stroke-width="2" stroke-linejoin="round" opacity="0.55"
+            transform="translate(-1.6199999999999999,-1.6199999999999999)"/>
+    </g>
+    
+    <g transform="translate(1000,0) scale(-1,1) translate(290,200)">
+      <path d="M -86 -74 H 86 A 30 30 0 0 1 116 -44
+    V 44 A 30 30 0 0 1 86 74 H -86
+    A 30 30 0 0 1 -116 44 V -44 A 30 30 0 0 1 -86 -74 Z" fill="rgba(120,160,200,0.10)"/>
+      <path d="M -86 -74 H 86 A 30 30 0 0 1 116 -44
+    V 44 A 30 30 0 0 1 86 74 H -86
+    A 30 30 0 0 1 -116 44 V -44 A 30 30 0 0 1 -86 -74 Z" fill="url(#glare)" opacity="0.9"/>
+      <path d="M -86 -74 H 86 A 30 30 0 0 1 116 -44
+    V 44 A 30 30 0 0 1 86 74 H -86
+    A 30 30 0 0 1 -116 44 V -44 A 30 30 0 0 1 -86 -74 Z" fill="none" stroke="#050505" stroke-width="13" stroke-linejoin="round"/>
+      <path d="M -86 -74 H 86 A 30 30 0 0 1 116 -44
+    V 44 A 30 30 0 0 1 86 74 H -86
+    A 30 30 0 0 1 -116 44 V -44 A 30 30 0 0 1 -86 -74 Z" fill="none" stroke="#1a1a1a" stroke-width="9" stroke-linejoin="round"/>
+      <path d="M -86 -74 H 86 A 30 30 0 0 1 116 -44
+    V 44 A 30 30 0 0 1 86 74 H -86
+    A 30 30 0 0 1 -116 44 V -44 A 30 30 0 0 1 -86 -74 Z" fill="none" stroke="#3a3a3a" stroke-width="2" stroke-linejoin="round" opacity="0.55"
+            transform="translate(-1.6199999999999999,-1.6199999999999999)"/>
+    </g>
+    <path d="M 402 145.4 C 436 115.4 564 115.4 598 145.4"
+         fill="none" stroke="#1a1a1a" stroke-width="9" stroke-linecap="round"/>
+       
+       <ellipse cx="414" cy="226" rx="7" ry="12" fill="rgba(230,235,240,0.55)" stroke="#050505" stroke-width="2"/>
+       <ellipse cx="586" cy="226" rx="7" ry="12" fill="rgba(230,235,240,0.55)" stroke="#050505" stroke-width="2"/>
+    <path d="M 164 130 C 250 96 350 96 418 128
+           L 418 154 C 350 128 250 128 164 156 Z"
+           fill="#1a1a1a" stroke="#050505" stroke-width="2"/><g transform="translate(1000,0) scale(-1,1)"><path d="M 164 130 C 250 96 350 96 418 128
+           L 418 154 C 350 128 250 128 164 156 Z"
+           fill="#1a1a1a" stroke="#050505" stroke-width="2"/></g>
+  </g>
+</svg>

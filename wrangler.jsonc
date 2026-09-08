@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "optic-coob",
+  "main": "cloudflare/worker.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+  // Base de données D1 (bookings, commandes, journal SMS).
+  // Schéma : npx wrangler d1 execute optic-coob --remote --file=src/lib/db/schema.sqlite.sql
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "optic-coob",
+      "database_id": "40836a73-583c-44db-8ed9-7ba7a1df56ee"
+    }
+  ],
+  // Rappel de rendez-vous la veille, 17h00 UTC (= 17h00 à Ouagadougou)
+  "triggers": { "crons": ["0 17 * * *"] },
+  // Variables non secrètes. Les secrets (ADMIN_PASSWORD, CRON_SECRET, identifiants SMS)
+  // se définissent avec `npx wrangler secret put NOM` ou dans le tableau de bord Cloudflare.
+  "vars": {
+    // À remplacer par l'URL réelle du site (domaine personnalisé ou optic-coob.<compte>.workers.dev)
+    "NEXT_PUBLIC_SITE_URL": "https://optic-coob.workers.dev",
+    "SMS_PROVIDER": "console"
+  }
+}

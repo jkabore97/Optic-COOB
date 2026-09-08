@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" width="1000" height="400" role="img" aria-label="Bobo ecaille">
+  <defs>
+    <pattern id="ecaille" patternUnits="userSpaceOnUse" width="60" height="44">
+      <rect width="60" height="44" fill="#8a4c1f"/>
+      <ellipse cx="14" cy="12" rx="13" ry="9" fill="#3d1e07" opacity="0.85"/>
+      <ellipse cx="44" cy="30" rx="15" ry="10" fill="#2e1504" opacity="0.8"/>
+      <ellipse cx="50" cy="6" rx="7" ry="5" fill="#c47a35" opacity="0.6"/>
+      <ellipse cx="6" cy="36" rx="9" ry="6" fill="#c47a35" opacity="0.5"/>
+    </pattern>
+    <linearGradient id="glare" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.02"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.10"/>
+    </linearGradient>
+  </defs>
+  <g>
+    
+    <rect x="118" y="148" width="30" height="26" rx="4" fill="url(#ecaille)" stroke="#3a1d08" stroke-width="2"/>
+    <rect x="852" y="148" width="30" height="26" rx="4" fill="url(#ecaille)" stroke="#3a1d08" stroke-width="2"/>
+    
+    <g transform=" translate(290,200)">
+      <path d="M -128 -76 C -60 -92 40 -90 110 -70 C 128 -64 130 -50 126 -30
+            C 118 20 105 70 80 84 C 40 100 -60 96 -100 80 C -122 70 -132 40 -134 0
+            C -136 -30 -136 -60 -128 -76 Z" fill="rgba(200,170,120,0.10)"/>
+      <path d="M -128 -76 C -60 -92 40 -90 110 -70 C 128 -64 130 -50 126 -30
+            C 118 20 105 70 80 84 C 40 100 -60 96 -100 80 C -122 70 -132 40 -134 0
+            C -136 -30 -136 -60 -128 -76 Z" fill="url(#glare)" opacity="0.9"/>
+      <path d="M -128 -76 C -60 -92 40 -90 110 -70 C 128 -64 130 -50 126 -30
+            C 118 20 105 70 80 84 C 40 100 -60 96 -100 80 C -122 70 -132 40 -134 0
+            C -136 -30 -136 -60 -128 -76 Z" fill="none" stroke="#3a1d08" stroke-width="28" stroke-linejoin="round"/>
+      <path d="M -128 -76 C -60 -92 40 -90 110 -70 C 128 -64 130 -50 126 -30
+            C 118 20 105 70 80 84 C 40 100 -60 96 -100 80 C -122 70 -132 40 -134 0
+            C -136 -30 -136 -60 -128 -76 Z" fill="none" stroke="url(#ecaille)" stroke-width="24" stroke-linejoin="round"/>
+      <path d="M -128 -76 C -60 -92 40 -90 110 -70 C 128 -64 130 -50 126 -30
+            C 118 20 105 70 80 84 C 40 100 -60 96 -100 80 C -122 70 -132 40 -134 0
+            C -136 -30 -136 -60 -128 -76 Z" fill="none" stroke="#a8672e" stroke-width="4.32" stroke-linejoin="round" opacity="0.55"
+            transform="translate(-4.32,-4.32)"/>
+    </g>
+    
+    <g transform="translate(1000,0) scale(-1,1) translate(290,200)">
+      <path d="M -128 -76 C -60 -92 40 -90 110 -70 C 128 -64 130 -50 126 -30
+            C 118 20 105 70 80 84 C 40 100 -60 96 -100 80 C -122 70 -132 40 -134 0
+            C -136 -30 -136 -60 -128 -76 Z" fill="rgba(200,170,120,0.10)"/>
+      <path d="M -128 -76 C -60 -92 40 -90 110 -70 C 128 -64 130 -50 126 -30
+            C 118 20 105 70 80 84 C 40 100 -60 96 -100 80 C -122 70 -132 40 -134 0
+            C -136 -30 -136 -60 -128 -76 Z" fill="url(#glare)" opacity="0.9"/>
+      <path d="M -128 -76 C -60 -92 40 -90 110 -70 C 128 -64 130 -50 126 -30
+            C 118 20 105 70 80 84 C 40 100 -60 96 -100 80 C -122 70 -132 40 -134 0
+            C -136 -30 -136 -60 -128 -76 Z" fill="none" stroke="#3a1d08" stroke-width="28" stroke-linejoin="round"/>
+      <path d="M -128 -76 C -60 -92 40 -90 110 -70 C 128 -64 130 -50 126 -30
+            C 118 20 105 70 80 84 C 40 100 -60 96 -100 80 C -122 70 -132 40 -134 0
+            C -136 -30 -136 -60 -128 -76 Z" fill="none" stroke="url(#ecaille)" stroke-width="24" stroke-linejoin="round"/>
+      <path d="M -128 -76 C -60 -92 40 -90 110 -70 C 128 -64 130 -50 126 -30
+            C 118 20 105 70 80 84 C 40 100 -60 96 -100 80 C -122 70 -132 40 -134 0
+            C -136 -30 -136 -60 -128 -76 Z" fill="none" stroke="#a8672e" stroke-width="4.32" stroke-linejoin="round" opacity="0.55"
+            transform="translate(-4.32,-4.32)"/>
+    </g>
+    <path d="M 412 136.4 C 448 114.4 552 114.4 588 136.4
+         L 588 160.4 C 552 138.4 448 138.4 412 160.4 Z"
+         fill="url(#ecaille)" stroke="#3a1d08" stroke-width="2"/>
+    
+  </g>
+</svg>

@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" width="1000" height="400" role="img" aria-label="Kadiogo ecaille">
+  <defs>
+    <pattern id="ecaille" patternUnits="userSpaceOnUse" width="60" height="44">
+      <rect width="60" height="44" fill="#8a4c1f"/>
+      <ellipse cx="14" cy="12" rx="13" ry="9" fill="#3d1e07" opacity="0.85"/>
+      <ellipse cx="44" cy="30" rx="15" ry="10" fill="#2e1504" opacity="0.8"/>
+      <ellipse cx="50" cy="6" rx="7" ry="5" fill="#c47a35" opacity="0.6"/>
+      <ellipse cx="6" cy="36" rx="9" ry="6" fill="#c47a35" opacity="0.5"/>
+    </pattern>
+    <linearGradient id="glare" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.02"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.10"/>
+    </linearGradient>
+  </defs>
+  <g>
+    
+    <rect x="137" y="162" width="30" height="26" rx="4" fill="url(#ecaille)" stroke="#3a1d08" stroke-width="2"/>
+    <rect x="833" y="162" width="30" height="26" rx="4" fill="url(#ecaille)" stroke="#3a1d08" stroke-width="2"/>
+    
+    <g transform=" translate(290,200)">
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="rgba(200,170,120,0.10)"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="url(#glare)" opacity="0.9"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="none" stroke="#3a1d08" stroke-width="22" stroke-linejoin="round"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="none" stroke="url(#ecaille)" stroke-width="18" stroke-linejoin="round"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="none" stroke="#a8672e" stroke-width="3.2399999999999998" stroke-linejoin="round" opacity="0.55"
+            transform="translate(-3.2399999999999998,-3.2399999999999998)"/>
+    </g>
+    
+    <g transform="translate(1000,0) scale(-1,1) translate(290,200)">
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="rgba(200,170,120,0.10)"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="url(#glare)" opacity="0.9"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="none" stroke="#3a1d08" stroke-width="22" stroke-linejoin="round"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="none" stroke="url(#ecaille)" stroke-width="18" stroke-linejoin="round"/>
+      <path d="M -90 -70 H 90 A 28 28 0 0 1 118 -42
+    V 42 A 28 28 0 0 1 90 70 H -90
+    A 28 28 0 0 1 -118 42 V -42 A 28 28 0 0 1 -90 -70 Z" fill="none" stroke="#a8672e" stroke-width="3.2399999999999998" stroke-linejoin="round" opacity="0.55"
+            transform="translate(-3.2399999999999998,-3.2399999999999998)"/>
+    </g>
+    <path d="M 399 152.8 C 432 130.8 568 130.8 601 152.8
+         L 601 170.8 C 568 148.8 432 148.8 399 170.8 Z"
+         fill="url(#ecaille)" stroke="#3a1d08" stroke-width="2"/>
+    
+  </g>
+</svg>
