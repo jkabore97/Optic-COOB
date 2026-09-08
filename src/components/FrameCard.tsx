@@ -12,7 +12,7 @@ import {
 
 export function FrameCard({ frame }: { frame: Frame }) {
   return (
-    <article className="card group overflow-hidden">
+    <article className="card lift group overflow-hidden">
       <Link href={`/montures/${frame.slug}`} className="block">
         <div className="relative flex aspect-[5/3] items-center justify-center bg-paper-2 p-6">
           <Image
