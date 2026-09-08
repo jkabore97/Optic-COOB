@@ -43,7 +43,7 @@ export function recordToFrame(r: CatalogFrameRecord): Frame {
       anchorR: { x: r.anchorRx, y: r.anchorRy },
     },
     has3d: false,
-    ...(modelUrl ? { model: { url: modelUrl } } : {}),
+    ...(modelUrl ? { model: { url: modelUrl, rotation: r.modelRotation } } : {}),
   };
 }
 

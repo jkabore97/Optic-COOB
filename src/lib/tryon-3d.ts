@@ -169,13 +169,23 @@ export function proceduralModel(opts: SceneOptions): ModelSpec {
   return { object: buildGlasses(opts), ipd: PROCEDURAL_IPD };
 }
 
-/** Charge un GLB et le normalise (origine au milieu des verres). */
-export async function loadGlbModel(url: string): Promise<ModelSpec> {
+/**
+ * Charge un GLB, applique la rotation de correction (degrés X, Y, Z) et le normalise
+ * (origine au milieu des verres).
+ */
+export async function loadGlbModel(url: string, rotationDeg: [number, number, number] = [0, 0, 0]): Promise<ModelSpec> {
   const gltf = await new GLTFLoader().loadAsync(url);
-  const object = gltf.scene;
+  const scene = gltf.scene;
+  const object = new THREE.Group();
+  scene.rotation.set(
+    THREE.MathUtils.degToRad(rotationDeg[0]),
+    THREE.MathUtils.degToRad(rotationDeg[1]),
+    THREE.MathUtils.degToRad(rotationDeg[2]),
+  );
+  object.add(scene);
   const estimated = normalizeGlassesModel(object);
   // Modèles générés par l'espace équipe : écart des verres connu précisément
-  const declared = Number(object.userData?.ipd ?? object.children[0]?.userData?.ipd);
+  const declared = Number(scene.userData?.ipd ?? scene.children[0]?.userData?.ipd);
   return { object, ipd: Number.isFinite(declared) && declared > 0 ? declared : estimated };
 }
 

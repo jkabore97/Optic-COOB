@@ -156,6 +156,7 @@ const FrameSchema = z.object({
   anchorRy: z.coerce.number().default(0),
   modelData: z.string().default(""),
   removeModel: z.string().optional(),
+  modelRotation: z.string().default("0,0,0"),
 });
 
 function decodeDataUrl(dataUrl: string): { mime: string; bytes: Uint8Array } | null {
@@ -246,6 +247,10 @@ export async function saveFrameAction(_prev: { error?: string } | undefined, fd:
   }
   if (model) await store.setFrameModel(frameId, model);
   else if (d.removeModel === "1") await store.deleteFrameModel(frameId);
+  if (d.removeModel !== "1") {
+    const rot = d.modelRotation.split(",").map(Number);
+    if (rot.length === 3 && rot.every(Number.isFinite)) await store.setFrameModelRotation(frameId, [rot[0], rot[1], rot[2]]);
+  }
   revalidatePath("/");
   revalidatePath("/montures");
   revalidatePath("/essayage");

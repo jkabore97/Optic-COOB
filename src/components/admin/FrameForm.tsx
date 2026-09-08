@@ -41,6 +41,13 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
   const [modelError, setModelError] = useState("");
   const [removeModel, setRemoveModel] = useState(false);
   const hasExistingModel = Boolean(initial?.modelUpdatedAt);
+  const [rotation, setRotation] = useState<[number, number, number]>(initial?.modelRotation ?? [0, 0, 0]);
+  const rotate = (axis: 0 | 1 | 2, delta: number) =>
+    setRotation((r) => {
+      const next: [number, number, number] = [...r] as [number, number, number];
+      next[axis] = ((next[axis] + delta) % 360 + 360) % 360;
+      return next;
+    });
   const [building, setBuilding] = useState(false);
   const [buildInfo, setBuildInfo] = useState("");
 
@@ -173,6 +180,7 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
       <input type="hidden" name="anchorRy" value={anchorR?.y ?? 0} />
       <input type="hidden" name="modelData" value={modelData} />
       <input type="hidden" name="removeModel" value={removeModel ? "1" : ""} />
+      <input type="hidden" name="modelRotation" value={rotation.join(",")} />
 
       {/* Photo + calibrage */}
       <section className="card p-5 lg:col-span-3">
@@ -311,8 +319,21 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
         </p>
         {(modelData || (hasExistingModel && !removeModel)) && (
           <div className="mt-4 max-w-lg">
-            <ModelPreview url={modelData || `/api/frames/${initial!.id}/model?v=${Date.parse(initial!.modelUpdatedAt!) || 0}`} />
-            <p className="mt-2 text-xs text-ink-3">Aperçu : la monture doit apparaître de face, branches vers l&apos;arrière.</p>
+            <ModelPreview url={modelData || `/api/frames/${initial!.id}/model?v=${Date.parse(initial!.modelUpdatedAt!) || 0}`} rotation={rotation} />
+            <p className="mt-2 text-xs text-ink-3">Aperçu : la monture doit apparaître de face, branches vers l&apos;arrière. Sinon, corrigez l&apos;orientation :</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              {(["X", "Y", "Z"] as const).map((label, axis) => (
+                <span key={label} className="inline-flex items-center gap-1 rounded-full bg-paper-2 px-2 py-1">
+                  <span className="font-semibold">{label}</span>
+                  <button type="button" className="rounded-full px-2 py-0.5 hover:bg-white" onClick={() => rotate(axis as 0 | 1 | 2, -90)} aria-label={`Tourner de −90° autour de ${label}`}>−90°</button>
+                  <span className="w-8 text-center tabular-nums">{rotation[axis]}°</span>
+                  <button type="button" className="rounded-full px-2 py-0.5 hover:bg-white" onClick={() => rotate(axis as 0 | 1 | 2, 90)} aria-label={`Tourner de +90° autour de ${label}`}>+90°</button>
+                </span>
+              ))}
+              {rotation.some(Boolean) && (
+                <button type="button" className="text-brand-700 hover:underline" onClick={() => setRotation([0, 0, 0])}>Réinitialiser</button>
+              )}
+            </div>
           </div>
         )}
       </section>
