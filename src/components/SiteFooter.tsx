@@ -48,8 +48,10 @@ export function SiteFooter() {
             <li><Link href="/essayage" className="hover:text-white">Essayage virtuel</Link></li>
             <li><Link href="/rendez-vous" className="hover:text-white">Prendre rendez-vous</Link></li>
             <li><Link href="/suivi" className="hover:text-white">Suivre ma commande</Link></li>
-            <li><Link href="/admin" className="hover:text-white">Espace équipe</Link></li>
           </ul>
+          <Link href="/admin/login" className="btn btn-sm mt-4 border border-brand-300/60 bg-transparent text-brand-300 hover:bg-brand-300/10">
+            Espace équipe →
+          </Link>
         </div>
 
         <div className="md:col-span-3">

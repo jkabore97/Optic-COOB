@@ -3,6 +3,8 @@ import Link from "next/link";
 import { FrameCard } from "@/components/FrameCard";
 import { Parallax } from "@/components/Parallax";
 import { Reveal } from "@/components/Reveal";
+import { CountUp } from "@/components/CountUp";
+import { StoreGallery } from "@/components/StoreGallery";
 import { AGENCIES, BRANDS, BUSINESS, OPENING_HOURS, WEEKDAY_LABELS, type Weekday } from "@/lib/config";
 import { getCatalog } from "@/lib/catalog";
 
@@ -38,6 +40,14 @@ const STEPS = [
   { n: "1", title: "Réservez en ligne", text: "Choisissez votre agence et votre créneau en 30 secondes. Confirmation immédiate par SMS." },
   { n: "2", title: "Choisissez vos montures", text: "Essayez-les virtuellement depuis votre téléphone, puis validez en boutique avec nos opticiens." },
   { n: "3", title: "Recevez un SMS", text: "Dès que vos lunettes sont prêtes, vous êtes prévenu. Plus besoin d'appeler ou de passer pour rien." },
+];
+
+const STORE_PHOTOS = [
+  { src: "/images/boutique-1.jpg", alt: "Mur de montures solaires et optiques en boutique", caption: "Le mur de montures" },
+  { src: "/images/boutique-2.jpg", alt: "Vitrines Cartier, Gucci et Bulgari en boutique", caption: "Vitrines des grandes marques" },
+  { src: "/images/boutique-3.jpg", alt: "Présentoirs de montures et entrée de la boutique", caption: "Présentoirs et entrée" },
+  { src: "/images/boutique-4.jpg", alt: "Présentoir Ray-Ban et espace enfants", caption: "Espace Ray-Ban et enfants" },
+  { src: "/images/boutique-5.jpg", alt: "Vitrine Gucci et lentilles de contact", caption: "Vitrine Gucci et lentilles" },
 ];
 
 const hours = (d: Weekday) =>
@@ -77,7 +87,7 @@ export default async function HomePage() {
                 <span className="text-accent-500" aria-hidden="true">★★★★★</span>
                 <span>{BUSINESS.reviewCount}+ avis Google</span>
               </a>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-100 px-3 py-1 text-xs font-semibold text-accent-700">
+              <span className="float-y inline-flex items-center gap-1.5 rounded-full bg-accent-100 px-3 py-1 text-xs font-semibold text-accent-700">
                 🏆 {BUSINESS.award}
               </span>
             </div>
@@ -85,7 +95,7 @@ export default async function HomePage() {
           <div className="relative order-1 md:order-2 rise-in rise-in-1">
             <div className="absolute -right-6 -top-6 h-40 w-40 rounded-full bg-brand-500/25 blur-2xl" aria-hidden="true" />
             <div className="relative grid grid-cols-2 gap-3">
-              <Parallax speed={0.06}>
+              <Parallax speed={0.06} className="h-full overflow-hidden rounded-3xl shadow-soft">
                 <Image
                   src="/images/signature.jpg"
                   alt="Campagne COOB Signature"
@@ -93,7 +103,7 @@ export default async function HomePage() {
                   height={1916}
                   priority
                   sizes="(min-width: 768px) 25vw, 50vw"
-                  className="h-full w-full rounded-3xl object-cover shadow-soft"
+                  className="ken-burns h-full w-full object-cover"
                 />
               </Parallax>
               <Parallax speed={0.14} className="grid gap-3">
@@ -137,6 +147,24 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* Chiffres */}
+      <section className="container-x pt-14">
+        <Reveal stagger={120} className="grid gap-4 sm:grid-cols-3">
+          <div className="card lift p-6 text-center">
+            <p className="text-4xl font-bold tracking-tight text-brand-700"><CountUp value={BUSINESS.reviewCount} suffix="+" /></p>
+            <p className="mt-1 text-sm text-ink-2">avis Google</p>
+          </div>
+          <div className="card lift p-6 text-center">
+            <p className="text-4xl font-bold tracking-tight text-brand-700"><CountUp value={AGENCIES.length} /></p>
+            <p className="mt-1 text-sm text-ink-2">agences à Ouagadougou et Bobo-Dioulasso</p>
+          </div>
+          <div className="card lift p-6 text-center">
+            <p className="text-4xl font-bold tracking-tight text-brand-700"><CountUp value={BRANDS.length} suffix="+" /></p>
+            <p className="mt-1 text-sm text-ink-2">grandes marques en boutique</p>
+          </div>
+        </Reveal>
+      </section>
+
       {/* Services */}
       <section className="container-x py-16">
         <Reveal>
@@ -145,7 +173,7 @@ export default async function HomePage() {
         </Reveal>
         <Reveal stagger={90} className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {SERVICES.map((s) => (
-            <div key={s.title} className="card flex flex-col p-5">
+            <div key={s.title} className="card lift flex flex-col p-5">
               <span className="mb-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-brand-700">✓</span>
               <h3 className="text-lg font-semibold">{s.title}</h3>
               <p className="mt-2 flex-1 text-sm text-ink-2">{s.text}</p>
@@ -180,6 +208,26 @@ export default async function HomePage() {
 
       )}
 
+      {/* Boutiques */}
+      <section className="overflow-hidden bg-white py-16">
+        <div className="container-x">
+          <Reveal className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="eyebrow">Nos boutiques</p>
+              <h2 className="mt-2 text-3xl font-bold tracking-tight">Entrez, regardez, essayez</h2>
+              <p className="mt-3 max-w-2xl text-ink-2">
+                Des centaines de montures exposées, les vitrines des grandes marques et un espace enfants.
+                Venez les essayer avec nos opticiens.
+              </p>
+            </div>
+            <Link href="/#contact" className="btn-outline">Voir nos agences</Link>
+          </Reveal>
+        </div>
+        <Reveal variant="fade" className="mt-8">
+          <StoreGallery photos={STORE_PHOTOS} />
+        </Reveal>
+      </section>
+
       {/* Steps */}
       <section className="bg-brand-500 py-16 text-ink">
         <div className="container-x">
@@ -189,7 +237,7 @@ export default async function HomePage() {
           </Reveal>
           <Reveal as="ol" stagger={120} className="mt-8 grid gap-4 md:grid-cols-3">
             {STEPS.map((s) => (
-              <li key={s.n} className="rounded-2xl bg-white/85 p-6 backdrop-blur">
+              <li key={s.n} className="lift rounded-2xl bg-white/85 p-6 backdrop-blur">
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-ink text-sm font-bold text-brand-300">{s.n}</span>
                 <h3 className="mt-4 text-lg font-semibold">{s.title}</h3>
                 <p className="mt-2 text-sm text-ink-2">{s.text}</p>
@@ -209,7 +257,7 @@ export default async function HomePage() {
             </Reveal>
             <Reveal stagger={100} className="mt-8 grid gap-4 sm:grid-cols-3">
               {AGENCIES.map((a) => (
-                <div key={a.id} className={`card p-5 ${a.main ? "ring-2 ring-brand-500" : ""}`}>
+                <div key={a.id} className={`card lift p-5 ${a.main ? "ring-2 ring-brand-500" : ""}`}>
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">{a.city}</p>
                   <h3 className="mt-1 text-lg font-semibold">{a.name}</h3>
                   <p className="mt-1 text-sm text-ink-2">{a.address}</p>
