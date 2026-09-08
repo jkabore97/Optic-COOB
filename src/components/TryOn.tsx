@@ -72,6 +72,11 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
   const [mode, setMode] = useState<Mode>("camera");
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState<string>("");
+  /** Détail technique de la dernière erreur (pour le support). */
+  const [detail, setDetail] = useState<string>("");
+  const [cameraOn, setCameraOn] = useState(false);
+  /** Rapport largeur/hauteur de la zone d'affichage, calé sur la caméra une fois connue. */
+  const [stageAspect, setStageAspect] = useState("4 / 3");
   const [pose, setPose] = useState<EyePose | null>(null);
   const [faceSeen, setFaceSeen] = useState(false);
   const [sizeAdj, setSizeAdj] = useState(1);
@@ -120,6 +125,7 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraOn(false);
   }, []);
 
   const setRunningMode = useCallback(async (m: "VIDEO" | "IMAGE") => {
@@ -129,30 +135,66 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
   }, []);
 
   const startCamera = useCallback(async () => {
+    stopCamera();
+    setSnapshot(null);
+    setDetail("");
+    setStatus("loading");
+    setMessage("Accès à la caméra…");
+
+    // 1. La caméra d'abord (dans la foulée du clic, ce que certains navigateurs exigent),
+    //    pour que l'utilisateur se voie immédiatement.
+    const video = videoRef.current;
+    if (!video) return;
     try {
-      stopCamera();
-      setSnapshot(null);
-      await ensureLandmarker();
-      await setRunningMode("VIDEO");
-      setMessage("Accès à la caméra…");
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
       streamRef.current = stream;
-      const video = videoRef.current!;
       video.srcObject = stream;
-      await video.play();
-      poseRef.current = null;
-      lastVideoTime.current = -1;
-      setStatus("ready");
-      setMessage("");
+      await video.play().catch(() => undefined);
+      setCameraOn(true);
+    } catch (err) {
+      console.error(err);
+      const name = (err as Error)?.name ?? "";
+      setStatus("error");
+      setDetail(`${name}${(err as Error)?.message ? ` : ${(err as Error).message}` : ""}`);
+      setMessage(
+        name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError"
+          ? "L'accès à la caméra a été refusé. Autorisez la caméra pour ce site dans votre navigateur, ou utilisez une photo."
+          : name === "NotFoundError" || name === "OverconstrainedError"
+            ? "Aucune caméra frontale détectée. Vous pouvez importer une photo à la place."
+            : name === "NotReadableError"
+              ? "La caméra est utilisée par une autre application. Fermez-la puis réessayez."
+              : "Impossible d'accéder à la caméra. Vérifiez qu'elle est autorisée, ou importez une photo.",
+      );
+      return;
+    }
 
-      /** Boucle de détection vidéo. */
-      const tick = () => {
-        const lm = landmarkerRef.current;
-        if (lm && video.readyState >= 2 && video.currentTime !== lastVideoTime.current) {
-          lastVideoTime.current = video.currentTime;
+    // 2. Puis le détecteur de visage (téléchargé une fois, puis en cache).
+    setMessage("Caméra active. Chargement du détecteur de visage (≈ 15 Mo la première fois)…");
+    try {
+      await ensureLandmarker();
+      await setRunningMode("VIDEO");
+    } catch (err) {
+      console.error(err);
+      setStatus("error");
+      setDetail(`${(err as Error)?.name ?? "Erreur"} : ${(err as Error)?.message ?? String(err)}`);
+      setMessage("Le détecteur de visage n'a pas pu être chargé. Vérifiez votre connexion et réessayez.");
+      return;
+    }
+
+    poseRef.current = null;
+    lastVideoTime.current = -1;
+    setStatus("ready");
+    setMessage("");
+
+    /** Boucle de détection vidéo. */
+    const tick = () => {
+      const lm = landmarkerRef.current;
+      if (lm && video.readyState >= 2 && video.currentTime !== lastVideoTime.current) {
+        lastVideoTime.current = video.currentTime;
+        try {
           const res = lm.detectForVideo(video, performance.now());
           const face = res.faceLandmarks[0];
           const p = face ? pupils(face) : null;
@@ -165,22 +207,17 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
           } else {
             setFaceSeen(false);
           }
+        } catch (err) {
+          console.error(err);
+          setStatus("error");
+          setDetail(`${(err as Error)?.name ?? "Erreur"} : ${(err as Error)?.message ?? String(err)}`);
+          setMessage("La détection du visage a rencontré une erreur. Réessayez, ou importez une photo.");
+          return;
         }
-        rafRef.current = requestAnimationFrame(tick);
-      };
+      }
       rafRef.current = requestAnimationFrame(tick);
-    } catch (err) {
-      console.error(err);
-      setStatus("error");
-      const name = (err as Error)?.name;
-      setMessage(
-        name === "NotAllowedError" || name === "SecurityError"
-          ? "L'accès à la caméra a été refusé. Autorisez la caméra dans votre navigateur, ou utilisez une photo."
-          : name === "NotFoundError"
-            ? "Aucune caméra détectée. Vous pouvez importer une photo à la place."
-            : "Impossible de démarrer l'essayage. Vérifiez votre connexion et réessayez, ou importez une photo.",
-      );
-    }
+    };
+    rafRef.current = requestAnimationFrame(tick);
   }, [ensureLandmarker, setRunningMode, stopCamera]);
 
   const detectPhoto = useCallback(async () => {
@@ -209,6 +246,7 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     } catch (err) {
       console.error(err);
       setStatus("error");
+      setDetail(`${(err as Error)?.name ?? "Erreur"} : ${(err as Error)?.message ?? String(err)}`);
       setMessage("Impossible d'analyser cette photo. Réessayez avec une autre image.");
     }
   }, [ensureLandmarker, setRunningMode]);
@@ -232,6 +270,7 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     setFaceSeen(false);
     setStatus("idle");
     setMessage("");
+    setDetail("");
   };
 
   // Nettoyage à la sortie de la page
@@ -327,11 +366,24 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
             </span>
           </div>
 
-          <div ref={stageRef} className="relative aspect-[4/3] w-full overflow-hidden bg-ink">
+          <div ref={stageRef} className="relative w-full overflow-hidden bg-ink" style={{ aspectRatio: stageAspect }}>
             <div className="absolute inset-0" style={{ transform: mirrored ? "scaleX(-1)" : undefined }}>
               <div className="relative h-full w-full">
                 {mode === "camera" ? (
-                  <video ref={videoRef} playsInline muted className="h-full w-full object-contain" />
+                  <video
+                    ref={videoRef}
+                    playsInline
+                    muted
+                    autoPlay
+                    className="h-full w-full object-contain"
+                    onLoadedMetadata={(e) => {
+                      const v = e.currentTarget;
+                      if (v.videoWidth && v.videoHeight) {
+                        const r = Math.min(16 / 9, Math.max(3 / 4, v.videoWidth / v.videoHeight));
+                        setStageAspect(`${r.toFixed(4)} / 1`);
+                      }
+                    }}
+                  />
                 ) : (
                   photoUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -352,7 +404,15 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
               </div>
             </div>
 
-            {(status !== "ready" || (mode === "photo" && !photoUrl)) && (
+            {/* Caméra active, détecteur en cours de chargement : bandeau discret au lieu du voile */}
+            {status === "loading" && cameraOn && (
+              <div className="absolute inset-x-3 top-3 flex items-center gap-2 rounded-xl bg-ink/75 px-3 py-2 text-xs text-white backdrop-blur">
+                <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
+                <span>{message}</span>
+              </div>
+            )}
+
+            {((status !== "ready" && !(status === "loading" && cameraOn)) || (mode === "photo" && !photoUrl)) && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-ink/70 p-6 text-center text-white">
                 {status === "loading" && (
                   <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
@@ -360,6 +420,9 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
                 <p className="max-w-sm text-sm">
                   {message || (mode === "photo" ? "Choisissez une photo de face pour commencer." : "Activez la caméra pour voir la monture sur votre visage, en direct.")}
                 </p>
+                {status === "error" && detail && (
+                  <p className="max-w-sm break-all font-mono text-[11px] text-white/60" title="Détail technique">{detail}</p>
+                )}
                 {status === "idle" && mode === "camera" && (
                   <div className="flex flex-wrap justify-center gap-2">
                     <button type="button" className="btn-accent" onClick={() => void startCamera()}>
