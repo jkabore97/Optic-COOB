@@ -237,20 +237,20 @@ export class PgStore implements Store {
   async listFrames(opts: { includeInactive?: boolean } = {}): Promise<CatalogFrameRecord[]> {
     await this.ready();
     const rows = opts.includeInactive
-      ? await this.sql`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation from frames f left join frame_models m on m.frame_id = f.id order by f.sort_order, f.created_at`
-      : await this.sql`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation from frames f left join frame_models m on m.frame_id = f.id where f.active order by f.sort_order, f.created_at`;
+      ? await this.sql`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation, m.use_in_tryon as model_in_tryon from frames f left join frame_models m on m.frame_id = f.id order by f.sort_order, f.created_at`
+      : await this.sql`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation, m.use_in_tryon as model_in_tryon from frames f left join frame_models m on m.frame_id = f.id where f.active order by f.sort_order, f.created_at`;
     return rows.map(rowToFrame);
   }
 
   async getFrame(id: string): Promise<CatalogFrameRecord | null> {
     await this.ready();
-    const [row] = await this.sql`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation from frames f left join frame_models m on m.frame_id = f.id where f.id = ${id}`;
+    const [row] = await this.sql`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation, m.use_in_tryon as model_in_tryon from frames f left join frame_models m on m.frame_id = f.id where f.id = ${id}`;
     return row ? rowToFrame(row) : null;
   }
 
   async getFrameBySlug(slug: string): Promise<CatalogFrameRecord | null> {
     await this.ready();
-    const [row] = await this.sql`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation from frames f left join frame_models m on m.frame_id = f.id where f.slug = ${slug}`;
+    const [row] = await this.sql`select f.*, m.updated_at as model_updated_at, m.rotation as model_rotation, m.use_in_tryon as model_in_tryon from frames f left join frame_models m on m.frame_id = f.id where f.slug = ${slug}`;
     return row ? rowToFrame(row) : null;
   }
 
@@ -279,9 +279,9 @@ export class PgStore implements Store {
       on conflict (frame_id) do update set mime = excluded.mime, model = excluded.model, updated_at = now()`;
   }
 
-  async setFrameModelRotation(frameId: string, rotation: [number, number, number]): Promise<void> {
+  async setFrameModelSettings(frameId: string, settings: { rotation: [number, number, number]; useInTryOn: boolean }): Promise<void> {
     await this.ready();
-    await this.sql`update frame_models set rotation = ${rotation.join(",")} where frame_id = ${frameId}`;
+    await this.sql`update frame_models set rotation = ${settings.rotation.join(",")}, use_in_tryon = ${settings.useInTryOn} where frame_id = ${frameId}`;
   }
 
   async deleteFrameModel(frameId: string): Promise<void> {

@@ -32,6 +32,12 @@ export interface BuiltModel {
   widthMm: number;
 }
 
+function polyArea(poly: P[]): number {
+  let a = 0;
+  for (let i = 0, n = poly.length; i < n; i++) a += poly[i].x * poly[(i + 1) % n].y - poly[(i + 1) % n].x * poly[i].y;
+  return a / 2;
+}
+
 /** Masque binaire (1 = monture) à partir du canal alpha, à résolution réduite. */
 function alphaMask(src: HTMLCanvasElement, maxW = 480): { mask: Uint8Array; w: number; h: number; scale: number } {
   const scale = Math.min(1, maxW / src.width);
@@ -167,8 +173,9 @@ export function buildFrameModel(photo: HTMLCanvasElement, opts: BuildOptions = {
     applyWrap(geo);
     group.add(new THREE.Mesh(geo, rimMat));
 
-    // Verres dans les trous
-    for (const hole of region.holes) {
+    // Verres : uniquement les deux plus grands trous (les autres sont des jours, pas des verres)
+    const lensHoles = [...region.holes].sort((a, b) => Math.abs(polyArea(b)) - Math.abs(polyArea(a))).slice(0, 2);
+    for (const hole of lensHoles) {
       const lens = new THREE.Mesh(new THREE.ShapeGeometry(toShape(hole), 2), lensMat);
       applyWrap(lens.geometry);
       group.add(lens);

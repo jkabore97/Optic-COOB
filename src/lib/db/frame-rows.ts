@@ -40,5 +40,6 @@ export function rowToFrame(r: Row): CatalogFrameRecord {
     updatedAt: iso(r.updated_at),
     modelUpdatedAt: r.model_updated_at == null ? null : iso(r.model_updated_at),
     modelRotation: parseRotation(r.model_rotation),
+    modelInTryOn: r.model_in_tryon === true || r.model_in_tryon === 1 || r.model_in_tryon === "1" || r.model_in_tryon === "true",
   };
 }
