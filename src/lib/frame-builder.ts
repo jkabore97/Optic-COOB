@@ -204,9 +204,11 @@ export function buildFrameModel(photo: HTMLCanvasElement, opts: BuildOptions = {
     const geo = new THREE.TubeGeometry(curve, 40, templeH / 2.6, 10, false);
     geo.scale(1, 1, 1);
     const temple = new THREE.Mesh(geo, templeMat);
+    temple.name = "temple";
     group.add(temple);
     // Charnière
     const hinge = new THREE.Mesh(new THREE.BoxGeometry(thickness * 1.2, templeH, thickness * 1.2), templeMat);
+    hinge.name = "hinge";
     hinge.position.set(hx + side * thickness * 0.4, hy, hz - thickness * 0.2);
     group.add(hinge);
   }

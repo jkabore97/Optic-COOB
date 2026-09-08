@@ -3,7 +3,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { buildGlasses, PROCEDURAL_IPD, type SceneOptions } from "./glasses-scene";
-import { faceWidthFrom, normalizeGlassesModel, placeGlasses, placeOccluder, rotationFromMatrix, unprojectAtDepth } from "./tryon-3d-math";
+import { faceWidthFrom, hideTemples, normalizeGlassesModel, placeGlasses, placeOccluder, rotationFromMatrix, unprojectAtDepth } from "./tryon-3d-math";
 
 /**
  * Moteur d'essayage 3D : un calque WebGL transparent au-dessus de la vidéo, une monture
@@ -28,7 +28,8 @@ export interface ModelSpec {
 }
 
 export interface TryOnEngine {
-  setModel(model: ModelSpec | null): void;
+  /** `hideTemples` (défaut vrai) : masque les branches, invisibles de face et gênantes à l'écran. */
+  setModel(model: ModelSpec | null, opts?: { hideTemples?: boolean }): void;
   /** Met à jour la pose ; null si aucun visage. */
   update(face: FaceObservation | null): void;
   setAdjust(size: number, y: number): void;
@@ -87,13 +88,16 @@ export function createTryOnEngine(canvas: HTMLCanvasElement): TryOnEngine {
 
   return {
     canvas,
-    setModel(model) {
+    setModel(model, opts = {}) {
       if (current) {
         root.remove(current.object);
         disposeObject(current.object);
       }
       current = model;
-      if (model) root.add(model.object);
+      if (model) {
+        if (opts.hideTemples ?? true) hideTemples(model.object);
+        root.add(model.object);
+      }
       hasPose = false;
     },
     setAdjust(size, y) {
