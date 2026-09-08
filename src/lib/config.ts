@@ -18,6 +18,35 @@ export interface Agency {
 
 const mapsSearch = (q: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 
+/** Variable d'environnement non vide, sinon la valeur par défaut. */
+const env = (name: string, fallback: string): string => {
+  const v = process.env[name]?.trim();
+  return v ? v : fallback;
+};
+
+/**
+ * URL publique du site : NEXT_PUBLIC_SITE_URL si valide, sinon l'URL fournie par
+ * l'hébergeur (Vercel), sinon le domaine par défaut.
+ */
+function resolveSiteUrl(): string {
+  const candidates = [
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`,
+    process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`,
+    "https://coob-optique.bf",
+  ];
+  for (const c of candidates) {
+    const v = c?.trim();
+    if (!v) continue;
+    try {
+      return new URL(v).origin;
+    } catch {
+      // valeur invalide : on passe à la suivante
+    }
+  }
+  return "https://coob-optique.bf";
+}
+
 export const AGENCIES: Agency[] = [
   {
     id: "koulouba",
@@ -25,8 +54,8 @@ export const AGENCIES: Agency[] = [
     city: "Ouagadougou",
     phoneDisplay: "+226 25 30 70 28",
     phoneE164: "+22625307028",
-    address: process.env.NEXT_PUBLIC_ADDRESS_KOULOUBA ?? "Koulouba, Ouagadougou",
-    mapsUrl: process.env.NEXT_PUBLIC_MAPS_KOULOUBA ?? mapsSearch("COOB Optique Koulouba Ouagadougou"),
+    address: env("NEXT_PUBLIC_ADDRESS_KOULOUBA", "Koulouba, Ouagadougou"),
+    mapsUrl: env("NEXT_PUBLIC_MAPS_KOULOUBA", mapsSearch("COOB Optique Koulouba Ouagadougou")),
     main: true,
   },
   {
@@ -35,8 +64,8 @@ export const AGENCIES: Agency[] = [
     city: "Ouagadougou",
     phoneDisplay: "+226 78 39 38 15",
     phoneE164: "+22678393815",
-    address: process.env.NEXT_PUBLIC_ADDRESS_GOUNGHIN ?? "Gounghin, Ouagadougou",
-    mapsUrl: process.env.NEXT_PUBLIC_MAPS_GOUNGHIN ?? mapsSearch("COOB Optique Gounghin Ouagadougou"),
+    address: env("NEXT_PUBLIC_ADDRESS_GOUNGHIN", "Gounghin, Ouagadougou"),
+    mapsUrl: env("NEXT_PUBLIC_MAPS_GOUNGHIN", mapsSearch("COOB Optique Gounghin Ouagadougou")),
   },
   {
     id: "bobo",
@@ -44,8 +73,8 @@ export const AGENCIES: Agency[] = [
     city: "Bobo-Dioulasso",
     phoneDisplay: "+226 20 98 38 04",
     phoneE164: "+22620983804",
-    address: process.env.NEXT_PUBLIC_ADDRESS_BOBO ?? "Bobo-Dioulasso",
-    mapsUrl: process.env.NEXT_PUBLIC_MAPS_BOBO ?? mapsSearch("COOB Optique Bobo-Dioulasso"),
+    address: env("NEXT_PUBLIC_ADDRESS_BOBO", "Bobo-Dioulasso"),
+    mapsUrl: env("NEXT_PUBLIC_MAPS_BOBO", mapsSearch("COOB Optique Bobo-Dioulasso")),
   },
 ];
 
@@ -64,18 +93,18 @@ export const BUSINESS = {
   phoneDisplay: MAIN_AGENCY.phoneDisplay,
   phoneE164: MAIN_AGENCY.phoneE164,
   /** Numéro WhatsApp (sans +). */
-  whatsapp: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "22678393815",
+  whatsapp: env("NEXT_PUBLIC_WHATSAPP_NUMBER", "22678393815"),
   whatsappDisplay: "+226 78 39 38 15",
   address: MAIN_AGENCY.address,
   city: "Ouagadougou",
   country: "Burkina Faso",
   mapsUrl: MAIN_AGENCY.mapsUrl,
-  reviewsUrl: process.env.NEXT_PUBLIC_REVIEWS_URL ?? MAIN_AGENCY.mapsUrl,
+  reviewsUrl: env("NEXT_PUBLIC_REVIEWS_URL", MAIN_AGENCY.mapsUrl),
   reviewCount: 175,
-  facebookUrl: process.env.NEXT_PUBLIC_FACEBOOK_URL ?? "",
-  instagramUrl: process.env.NEXT_PUBLIC_INSTAGRAM_URL ?? "",
+  facebookUrl: env("NEXT_PUBLIC_FACEBOOK_URL", ""),
+  instagramUrl: env("NEXT_PUBLIC_INSTAGRAM_URL", ""),
   timeZone: "Africa/Ouagadougou",
-  siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://coob-optique.bf",
+  siteUrl: resolveSiteUrl(),
 } as const;
 
 /** Marques distribuées (affichées sur la page d'accueil). */
