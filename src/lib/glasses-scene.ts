@@ -63,7 +63,14 @@ function frameMaterial(opts: SceneOptions): THREE.Material {
   });
 }
 
-function buildGlasses(opts: SceneOptions): THREE.Group {
+/** Distance entre les centres des verres du modèle procédural (unités de la scène). */
+export const PROCEDURAL_IPD = LENS_OFFSET * 2;
+
+/**
+ * Construit une paire de lunettes procédurale. Repère : centres des verres en (±210, 0, 0),
+ * plan des verres en z = 0, branches vers z négatif, face avant vers +z.
+ */
+export function buildGlasses(opts: SceneOptions): THREE.Group {
   const group = new THREE.Group();
   const thin = opts.material === "metal" || opts.material === "titane";
   const rimR = thin ? 4.5 : opts.shape === "wayfarer" || opts.shape === "carre" ? 12 : 9;
@@ -156,8 +163,6 @@ function buildGlasses(opts: SceneOptions): THREE.Group {
     }
   }
 
-  // Recentre le groupe sur son centre visuel (le verre, pas les branches)
-  group.position.set(0, 0, 40);
   return group;
 }
 
@@ -187,6 +192,8 @@ export function mountGlassesScene(host: HTMLElement, opts: SceneOptions): () => 
 
   const pivot = new THREE.Group();
   const glasses = buildGlasses(opts);
+  // Recentre sur le centre visuel (le verre, pas les branches)
+  glasses.position.set(0, 0, 40);
   pivot.add(glasses);
   scene.add(pivot);
 

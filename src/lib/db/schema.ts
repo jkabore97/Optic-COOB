@@ -85,6 +85,13 @@ create table if not exists frames (
   updated_at timestamptz not null default now()
 );
 create index if not exists frames_active_idx on frames (active, sort_order, created_at);
+
+create table if not exists frame_models (
+  frame_id text primary key references frames(id) on delete cascade,
+  mime text not null,
+  model bytea not null,
+  updated_at timestamptz not null default now()
+);
 `;
 
 export const SQLITE_SCHEMA = `
@@ -169,6 +176,13 @@ create table if not exists frames (
   updated_at text not null
 );
 create index if not exists frames_active_idx on frames (active, sort_order, created_at);
+
+create table if not exists frame_models (
+  frame_id text primary key references frames(id) on delete cascade,
+  mime text not null,
+  model blob not null,
+  updated_at text not null
+);
 `;
 
 /** Découpe un script en instructions (pour les moteurs sans exécution multi-instructions). */

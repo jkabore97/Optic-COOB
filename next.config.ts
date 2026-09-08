@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   experimental: {
     // Photos de montures envoyées en base64 depuis l'espace équipe
-    serverActions: { bodySizeLimit: "8mb" },
+    serverActions: { bodySizeLimit: "12mb" },
   },
   images: {
     // Sur Cloudflare Workers, pas d'optimiseur d'images intégré : servir les fichiers tels quels.

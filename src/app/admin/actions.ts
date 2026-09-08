@@ -128,6 +128,8 @@ export async function setAppointmentStatusAction(fd: FormData) {
 // ---- Catalogue de montures ----
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+/** Limite des fonctions Vercel (4,5 Mo par requête, base64 compris). */
+const MAX_MODEL_BYTES = 3 * 1024 * 1024;
 
 const FrameSchema = z.object({
   id: z.string().optional().default(""),
@@ -152,12 +154,24 @@ const FrameSchema = z.object({
   anchorLy: z.coerce.number().default(0),
   anchorRx: z.coerce.number().default(0),
   anchorRy: z.coerce.number().default(0),
+  modelData: z.string().default(""),
+  removeModel: z.string().optional(),
 });
 
 function decodeDataUrl(dataUrl: string): { mime: string; bytes: Uint8Array } | null {
   const m = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(dataUrl);
   if (!m) return null;
   return { mime: m[1], bytes: new Uint8Array(Buffer.from(m[2], "base64")) };
+}
+
+/** Décode un GLB envoyé en data URL (le navigateur peut l'étiqueter en octet-stream). */
+function decodeModelDataUrl(dataUrl: string): { mime: string; bytes: Uint8Array } | null {
+  const m = /^data:([^;]*);base64,(.+)$/.exec(dataUrl);
+  if (!m) return null;
+  const bytes = new Uint8Array(Buffer.from(m[2], "base64"));
+  // Signature GLB : "glTF" en tête de fichier
+  if (bytes.length < 12 || String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) !== "glTF") return null;
+  return { mime: "model/gltf-binary", bytes };
 }
 
 async function uniqueSlug(base: string, ownId: string | null): Promise<string> {
@@ -185,6 +199,9 @@ export async function saveFrameAction(_prev: { error?: string } | undefined, fd:
   if (d.imageData && !image) return { error: "Format d'image non pris en charge (PNG, JPEG ou WebP)." };
   if (image && image.bytes.byteLength > MAX_IMAGE_BYTES) return { error: "Photo trop lourde (4 Mo maximum)." };
   if (!d.id && !image) return { error: "Ajoutez une photo de la monture." };
+  const model = d.modelData ? decodeModelDataUrl(d.modelData) : null;
+  if (d.modelData && !model) return { error: "Le modèle 3D doit être un fichier .glb (glTF binaire)." };
+  if (model && model.bytes.byteLength > MAX_MODEL_BYTES) return { error: "Modèle 3D trop lourd (3 Mo maximum). Compressez-le avec gltf-transform ou Blender." };
   if (d.imageWidth && (d.anchorLx === d.anchorRx && d.anchorLy === d.anchorRy)) {
     return { error: "Calibrez les deux centres de verres sur la photo." };
   }
@@ -216,14 +233,19 @@ export async function saveFrameAction(_prev: { error?: string } | undefined, fd:
   };
 
   let message: string;
+  let frameId: string;
   if (d.id) {
     const updated = await store.updateFrame(d.id, input, image);
     if (!updated) return { error: "Monture introuvable." };
+    frameId = updated.id;
     message = `« ${updated.name} » mise à jour.`;
   } else {
     const created = await store.createFrame(input, image);
+    frameId = created.id;
     message = `« ${created.name} » ajoutée au catalogue.`;
   }
+  if (model) await store.setFrameModel(frameId, model);
+  else if (d.removeModel === "1") await store.deleteFrameModel(frameId);
   revalidatePath("/");
   revalidatePath("/montures");
   revalidatePath("/essayage");

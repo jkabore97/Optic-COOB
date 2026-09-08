@@ -56,8 +56,10 @@ export interface Frame {
   description: string;
   tags?: string[];
   image: FrameImage;
-  /** Vue 3D disponible (montures construites à partir d'une forme, pas d'une photo). */
+  /** Vue 3D procédurale disponible (montures de démonstration construites à partir d'une forme). */
   has3d: boolean;
+  /** Modèle 3D réel (GLB) fourni dans l'espace équipe. */
+  model?: { url: string };
 }
 
 /** Données d'une monture de démonstration (le reste est dérivé). */

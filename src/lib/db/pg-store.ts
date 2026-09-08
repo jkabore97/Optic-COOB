@@ -7,6 +7,7 @@ import type {
   CatalogFrameInput,
   CatalogFrameRecord,
   FrameImageBlob,
+  FrameModelBlob,
   NewAppointment,
   NewOrder,
   Order,
@@ -234,20 +235,20 @@ export class PgStore implements Store {
   async listFrames(opts: { includeInactive?: boolean } = {}): Promise<CatalogFrameRecord[]> {
     await this.ready();
     const rows = opts.includeInactive
-      ? await this.sql`select * from frames order by sort_order, created_at`
-      : await this.sql`select * from frames where active order by sort_order, created_at`;
+      ? await this.sql`select f.*, m.updated_at as model_updated_at from frames f left join frame_models m on m.frame_id = f.id order by f.sort_order, f.created_at`
+      : await this.sql`select f.*, m.updated_at as model_updated_at from frames f left join frame_models m on m.frame_id = f.id where f.active order by f.sort_order, f.created_at`;
     return rows.map(rowToFrame);
   }
 
   async getFrame(id: string): Promise<CatalogFrameRecord | null> {
     await this.ready();
-    const [row] = await this.sql`select * from frames where id = ${id}`;
+    const [row] = await this.sql`select f.*, m.updated_at as model_updated_at from frames f left join frame_models m on m.frame_id = f.id where f.id = ${id}`;
     return row ? rowToFrame(row) : null;
   }
 
   async getFrameBySlug(slug: string): Promise<CatalogFrameRecord | null> {
     await this.ready();
-    const [row] = await this.sql`select * from frames where slug = ${slug}`;
+    const [row] = await this.sql`select f.*, m.updated_at as model_updated_at from frames f left join frame_models m on m.frame_id = f.id where f.slug = ${slug}`;
     return row ? rowToFrame(row) : null;
   }
 
@@ -266,6 +267,26 @@ export class PgStore implements Store {
         ${input.active}, ${input.sortOrder})
       returning *`;
     return rowToFrame(row);
+  }
+
+  async setFrameModel(frameId: string, model: { mime: string; bytes: Uint8Array }): Promise<void> {
+    await this.ready();
+    await this.sql`
+      insert into frame_models (frame_id, mime, model, updated_at)
+      values (${frameId}, ${model.mime}, ${Buffer.from(model.bytes)}, now())
+      on conflict (frame_id) do update set mime = excluded.mime, model = excluded.model, updated_at = now()`;
+  }
+
+  async deleteFrameModel(frameId: string): Promise<void> {
+    await this.ready();
+    await this.sql`delete from frame_models where frame_id = ${frameId}`;
+  }
+
+  async getFrameModel(frameId: string): Promise<FrameModelBlob | null> {
+    await this.ready();
+    const [row] = await this.sql`select mime, model, updated_at from frame_models where frame_id = ${frameId}`;
+    if (!row) return null;
+    return { mime: String(row.mime), bytes: row.model as Uint8Array, updatedAt: iso(row.updated_at)! };
   }
 
   async updateFrame(id: string, patch: Partial<CatalogFrameInput>, image?: ImageInput): Promise<CatalogFrameRecord | null> {
