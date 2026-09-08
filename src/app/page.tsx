@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { FrameCard } from "@/components/FrameCard";
-import { HeroGlasses } from "@/components/HeroGlasses";
 import { AGENCIES, BRANDS, BUSINESS, OPENING_HOURS, WEEKDAY_LABELS, type Weekday } from "@/lib/config";
 import { getCatalog } from "@/lib/catalog";
 
@@ -46,17 +45,18 @@ const hours = (d: Weekday) =>
 
 export default async function HomePage() {
   const catalog = await getCatalog();
+  const hasRealFrames = catalog.some((f) => f.source === "db");
   const featured = catalog.slice(0, 4);
 
   return (
     <>
-      {/* Hero */}
+      {/* Hero : visuels de la campagne COOB Signature */}
       <section className="relative overflow-hidden bg-white">
         <div className="container-x grid items-center gap-10 py-12 md:grid-cols-2 md:py-16">
-          <div>
+          <div className="order-2 md:order-1">
             <p className="eyebrow">{BUSINESS.legalName}</p>
             <h1 className="mt-3 text-4xl font-bold tracking-tight text-ink sm:text-5xl">
-              Votre vision, <span className="text-brand-600">notre expertise.</span>
+              Signe ton style. <span className="text-brand-600">Vois mieux.</span>
             </h1>
             <p className="mt-5 max-w-lg text-lg text-ink-2">
               Examen de la vue, montures de grandes marques et verres certifiés, à Ouagadougou et Bobo-Dioulasso.
@@ -80,7 +80,42 @@ export default async function HomePage() {
               </span>
             </div>
           </div>
-          <HeroGlasses />
+          <div className="relative order-1 md:order-2">
+            <div className="absolute -right-6 -top-6 h-40 w-40 rounded-full bg-brand-500/25 blur-2xl" aria-hidden="true" />
+            <div className="relative grid grid-cols-2 gap-3">
+              <Image
+                src="/images/signature.jpg"
+                alt="Campagne COOB Signature"
+                width={1440}
+                height={1916}
+                priority
+                sizes="(min-width: 768px) 25vw, 50vw"
+                className="h-full w-full rounded-3xl object-cover shadow-soft"
+              />
+              <div className="grid gap-3">
+                <Image
+                  src="/images/campagne-signe-ton-style.jpg"
+                  alt="Campagne #SigneTonStyle"
+                  width={1600}
+                  height={612}
+                  priority
+                  sizes="(min-width: 768px) 25vw, 50vw"
+                  className="w-full rounded-3xl object-cover shadow-soft"
+                />
+                <Image
+                  src="/images/poster-vision-parfaite.jpg"
+                  alt="Ce qui compte le plus à vos yeux mérite une vision parfaite"
+                  width={1440}
+                  height={1833}
+                  sizes="(min-width: 768px) 25vw, 50vw"
+                  className="w-full rounded-3xl object-cover shadow-soft"
+                />
+              </div>
+            </div>
+            <p className="absolute bottom-4 left-4 rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-ink shadow-soft backdrop-blur">
+              {BUSINESS.tagline}
+            </p>
+          </div>
         </div>
       </section>
 
@@ -114,7 +149,8 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Catalogue */}
+      {/* Catalogue : uniquement les vraies montures ajoutées dans l'espace équipe */}
+      {hasRealFrames && (
       <section className="bg-white py-16">
         <div className="container-x">
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -134,32 +170,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Signature */}
-      <section className="container-x grid items-center gap-8 py-16 md:grid-cols-2">
-        <div className="grid grid-cols-2 gap-4">
-          <Image src="/images/signature.jpg" alt="Campagne COOB Signature" width={1440} height={1916} sizes="(min-width: 768px) 25vw, 50vw" className="w-full rounded-3xl object-cover" />
-          <div className="grid gap-4">
-            <Image src="/images/campagne-signe-ton-style.jpg" alt="Campagne #SigneTonStyle" width={1600} height={612} sizes="(min-width: 768px) 25vw, 50vw" className="w-full rounded-3xl object-cover" />
-            <Image src="/images/poster-vision-parfaite.jpg" alt="Ce qui compte le plus à vos yeux mérite une vision parfaite" width={1440} height={1833} sizes="(min-width: 768px) 25vw, 50vw" className="w-full rounded-3xl object-cover" />
-          </div>
-        </div>
-        <div>
-          <p className="eyebrow">COOB Signature</p>
-          <h2 className="mt-2 text-3xl font-bold tracking-tight">Signe ton style</h2>
-          <p className="mt-4 text-ink-2">
-            Des lunettes qui corrigent votre vue et affirment votre personnalité. Notre collection Signature
-            réunit des montures sélectionnées pour leur caractère, à essayer en ligne avant de passer en agence.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Link href="/essayage" className="btn-lime">
-              Essayer virtuellement
-            </Link>
-            <Link href="/montures" className="btn-outline">
-              Découvrir la collection
-            </Link>
-          </div>
-        </div>
-      </section>
+      )}
 
       {/* Steps */}
       <section className="bg-brand-500 py-16 text-ink">

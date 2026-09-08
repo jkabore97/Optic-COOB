@@ -18,9 +18,13 @@ export default async function LoginPage() {
         {enabled ? (
           <LoginForm />
         ) : (
-          <p className="mt-6 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            L&apos;espace équipe est désactivé : définissez la variable d&apos;environnement <code>ADMIN_PASSWORD</code>.
-          </p>
+          <div className="mt-6 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p className="font-semibold">L&apos;espace équipe n&apos;est pas encore activé.</p>
+            <p className="mt-1">
+              Sur Vercel : <em>Settings → Environment Variables</em>, ajoutez <code>ADMIN_PASSWORD</code> avec le mot de
+              passe de votre choix, puis <em>Deployments → Redeploy</em>. Cette page deviendra un formulaire de connexion.
+            </p>
+          </div>
         )}
       </div>
     </div>
