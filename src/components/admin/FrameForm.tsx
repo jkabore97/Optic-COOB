@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState, useRef, useState } from "react";
 import { saveFrameAction } from "@/app/admin/actions";
 import { COLOR_LABELS, COLOR_SWATCH, GENDER_LABELS, MATERIAL_LABELS, SHAPE_LABELS } from "@/lib/frames";
-import { detectLensCenters, loadToCanvas, removeLightBackground, trimTransparent } from "@/lib/image-tools";
+import { detectLensCenters, loadToCanvas, removeLightBackground, removeTemples, trimTransparent } from "@/lib/image-tools";
 import { defaultAnchors, type Pt } from "@/lib/tryon-math";
 import type { CatalogFrameRecord } from "@/lib/db/types";
 import { ModelPreview } from "./ModelPreview";
@@ -108,13 +108,54 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
   };
   const [removeBg, setRemoveBg] = useState(true);
   const [clearLenses, setClearLenses] = useState(true);
+  const [cutTemples, setCutTemples] = useState(true);
+  const [templesInfo, setTemplesInfo] = useState("");
   const [threshold, setThreshold] = useState(228);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<File | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const processFile = async (file: File | null, remove = removeBg, thr = threshold, lenses = clearLenses) => {
+  /** Applique le détourage / retrait des branches / calibrage à un canvas et l'adopte comme photo. */
+  const adoptCanvas = (canvas: HTMLCanvasElement, temples: boolean) => {
+    if (temples) {
+      const ok = removeTemples(canvas);
+      setTemplesInfo(ok ? "" : "Branches non retirées : les deux verres n'ont pas été identifiés (activez « Verres transparents »).");
+      if (ok) canvas = trimTransparent(canvas);
+    } else {
+      setTemplesInfo("");
+    }
+    const data = canvas.toDataURL("image/png");
+    setImage({ data, src: data, width: canvas.width, height: canvas.height });
+    const auto = detectLensCenters(canvas);
+    if (auto) {
+      setAnchorL(auto.anchorL);
+      setAnchorR(auto.anchorR);
+      setPicking(null);
+      setAutoCalibrated(true);
+    } else {
+      const def = defaultAnchors(canvas.width, canvas.height);
+      setAnchorL(def.anchorL);
+      setAnchorR(def.anchorR);
+      setPicking("L");
+      setAutoCalibrated(false);
+    }
+  };
+
+  /** Retire les branches de la photo déjà enregistrée (sans nouveau fichier). */
+  const reprocessExisting = async () => {
+    if (!image) return;
+    setBusy(true);
+    try {
+      const { imageToCanvas } = await import("@/lib/frame-builder");
+      const canvas = await imageToCanvas(image.src);
+      adoptCanvas(canvas, true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const processFile = async (file: File | null, remove = removeBg, thr = threshold, lenses = clearLenses, temples = cutTemples) => {
     if (!file) return;
     setBusy(true);
     try {
@@ -123,23 +164,7 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
         removeLightBackground(canvas, thr, lenses ? "all" : "edges");
         canvas = trimTransparent(canvas);
       }
-      const data = canvas.toDataURL("image/png");
-      const next = { data, src: data, width: canvas.width, height: canvas.height };
-      setImage(next);
-      // Calibrage automatique : centres des deux zones transparentes (les verres)
-      const auto = detectLensCenters(canvas);
-      if (auto) {
-        setAnchorL(auto.anchorL);
-        setAnchorR(auto.anchorR);
-        setPicking(null);
-        setAutoCalibrated(true);
-      } else {
-        const def = defaultAnchors(canvas.width, canvas.height);
-        setAnchorL(def.anchorL);
-        setAnchorR(def.anchorR);
-        setPicking("L");
-        setAutoCalibrated(false);
-      }
+      adoptCanvas(canvas, remove && temples);
     } finally {
       setBusy(false);
     }
@@ -222,6 +247,20 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
             </label>
           )}
           {removeBg && (
+            <label className="flex items-center gap-2 text-sm text-ink-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-brand-700"
+                checked={cutTemples}
+                onChange={(e) => {
+                  setCutTemples(e.target.checked);
+                  void processFile(fileRef.current, true, threshold, clearLenses, e.target.checked);
+                }}
+              />
+              Retirer les branches
+            </label>
+          )}
+          {removeBg && (
             <label className="flex items-center gap-2 text-xs text-ink-3">
               Sensibilité
               <input
@@ -278,6 +317,12 @@ export function FrameForm({ initial, initialImageUrl }: Props) {
             <p className="mt-2 text-xs text-ink-3">
               Ces deux points sont alignés sur les pupilles lors de l&apos;essayage virtuel. Ils doivent être au centre de chaque verre.
             </p>
+            {templesInfo && <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">{templesInfo}</p>}
+            {!image.data && (
+              <button type="button" className="btn-outline btn-sm mt-3" onClick={() => void reprocessExisting()} disabled={busy}>
+                Retirer les branches de cette photo
+              </button>
+            )}
           </>
         ) : (
           <div className="mt-4 flex h-40 items-center justify-center rounded-xl border border-dashed border-ink/20 text-sm text-ink-3">

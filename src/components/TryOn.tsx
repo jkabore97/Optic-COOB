@@ -87,6 +87,9 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<string | null>(null);
   const [engineReady, setEngineReady] = useState(false);
+  /** Visuel photo à superposer : version sans branches pour les montures du catalogue. */
+  const [overlaySrc, setOverlaySrc] = useState<string>(frameImageUrl(frame));
+  const cleanedRef = useRef(new Map<string, string>());
   const [modelLoading, setModelLoading] = useState(false);
 
   /** Rendu 3D (modèle GLB ou monture procédurale) plutôt que photo à plat. */
@@ -345,6 +348,34 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
     };
   }, [stopCamera]);
 
+  // ---- Photo sans branches (montures du catalogue rendues à plat) ----
+  useEffect(() => {
+    const url = frameImageUrl(frame);
+    if (frame.source !== "db") {
+      setOverlaySrc(url);
+      return;
+    }
+    const cached = cleanedRef.current.get(frame.id);
+    if (cached) {
+      setOverlaySrc(cached);
+      return;
+    }
+    let cancelled = false;
+    setOverlaySrc(url);
+    Promise.all([import("@/lib/frame-builder"), import("@/lib/image-tools")])
+      .then(async ([{ imageToCanvas }, { removeTemples }]) => {
+        const canvas = await imageToCanvas(url);
+        if (!removeTemples(canvas)) return; // verres non identifiés : photo telle quelle
+        const data = canvas.toDataURL("image/png");
+        cleanedRef.current.set(frame.id, data);
+        if (!cancelled) setOverlaySrc(data);
+      })
+      .catch((err) => console.error("[essayage] retrait des branches", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [frame]);
+
   // ---- Moteur 3D : création quand la scène est prête en mode 3D ----
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -512,7 +543,7 @@ export function TryOn({ frames, initialSlug }: { frames: Frame[]; initialSlug?: 
                     <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img ref={overlayRef} src={frameImageUrl(frame)} alt="" style={overlayStyle} />
+                    <img ref={overlayRef} src={overlaySrc} alt="" style={overlayStyle} />
                   )}
                 </OverlayBox>
               </div>
